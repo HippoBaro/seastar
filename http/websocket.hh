@@ -12,62 +12,119 @@
 namespace httpd {
 
 class websocket_fragment {
-    temporary_buffer<char> _raw;
-    uint16_t _header;
+public:
+    enum opcode : int {
+        CONTINUATION = 0x0,
+        TEXT = 0x1,
+        BINARY = 0x2,
+        CLOSE = 0x8,
+        PING = 0x9,
+        PONG = 0xA,
+        RESERVED = 0xB
+    };
+
+private:
 
     bool _fin;
-    unsigned char _opcode;
+    enum opcode _opcode = RESERVED;
     uint64_t _lenght;
-    bool _rsv23;
+    bool _rsv2;
+    bool _rsv3;
     bool _rsv1;
     bool _masked;
-
-    uint32_t _maskkey;
+    temporary_buffer<char> _maskkey;
 
 public:
-
     temporary_buffer<char> data;
 
-    websocket_fragment(temporary_buffer<char> &&raw) : _raw(std::move(raw)), _header(0) {
+    websocket_fragment(websocket_fragment &&fragment) noexcept : _fin(fragment.fin()),
+                                                        _opcode(fragment.opcode()),
+                                                        _lenght(fragment.length()),
+                                                        _rsv2(fragment.rsv2()),
+                                                        _rsv3(fragment.rsv3()),
+                                                        _rsv1(fragment.rsv1()),
+                                                        _masked(fragment.masked()),
+                                                        _maskkey(std::move(fragment._maskkey)),
+                                                        data(std::move(fragment.data)) {
+    }
+
+    websocket_fragment(temporary_buffer<char> &&raw) {
         uint64_t i = sizeof(uint16_t);
-        std::memcpy(&_header, _raw.begin(), sizeof(uint16_t));
-        _fin = _header & 128;
-        _opcode = _header & 15;
-        _rsv23 = _header & 48;
-        _rsv1 = _header & 64;
-        _masked = _header & 32768;
-        _lenght = (_header >> 8) & 127;
-        if (_lenght == 126) {
-            _lenght = *((uint16_t *) _raw.share(i, sizeof(uint16_t)).get());
+
+        for (std::size_t i = 0; i < raw.size(); ++i)
+            std::cout << std::bitset<8>(raw.begin()[i]) << std::endl;
+
+        std::bitset<8> header(raw.begin()[0]);
+        std::cout << "header : " << header << std::endl;
+        _fin = header.test(7);
+        std::cout << "fin : " << _fin << std::endl;
+        _rsv1 = header.test(6);
+        std::cout << "rsv1 : " << rsv1() << std::endl;
+        _rsv2 = header.test(5);
+        std::cout << "rsv2 : " << rsv2() << std::endl;
+        _rsv3 = header.test(4);
+        std::cout << "rsv3 : " << rsv3() << std::endl;
+        _opcode = static_cast<enum opcode>(header.reset(7).reset(6).reset(5).reset(4).to_ulong());
+        std::cout << "opcode : " << _opcode << std::endl;
+
+        header = std::bitset<8>(raw.begin()[1]);
+        std::cout << "header : " << header << std::endl;
+        _masked = header.test(7);
+        std::cout << "masked : " << _masked << std::endl;
+        header = header.reset(7);
+        std::cout << "header : " << header << std::endl;
+
+        if (header.to_ulong() < 126) {
+            _lenght = header.to_ulong();
+            std::cout << "lenght : " << _lenght << std::endl;
+        }
+        else if (header.to_ulong() == 126) {
+            _lenght = *((uint16_t *) raw.share(i, sizeof(uint16_t)).get());
+            std::cout << "lenght : " << _lenght << std::endl;
             i += sizeof(uint16_t);
-        } else if (_lenght == 127) {
-            _lenght = *((uint64_t *) _raw.share(i, sizeof(uint64_t)).get());
+        }
+        else if (header.to_ulong() == 127) {
+            _lenght = *((uint64_t *) raw.share(i, sizeof(uint64_t)).get());
+            std::cout << "lenght : " << _lenght << std::endl;
             i += sizeof(uint64_t);
         }
 
         if (_masked) {
-            _maskkey = *((uint16_t *) _raw.share(i, sizeof(uint32_t)).get());
+            _maskkey = temporary_buffer<char>(std::move(raw.share(i, sizeof(uint32_t))));
             i += sizeof(uint32_t);
-        }
 
-        data = _raw.share(i, _lenght);
+            data = temporary_buffer<char>(std::move(raw.share(i, _lenght)));
+            for (uint64_t j = 0; j < _lenght; ++j)
+            {
+                std::cout << "----------" << std::endl;
+                std::bitset<8> dat(data[j]);
+                std::bitset<8> key(_maskkey[j%4]);
+                std::cout << dat << " ^ " << key << " --> " << (dat ^ key) << std::endl;
+                std::cout << data[j] << " --> " << (char)(data[j] ^ _maskkey[j%4]) << std::endl;
+                data.get_write()[j] = data[j] ^ _maskkey[j%4];
+            }
+            std::cout << std::endl;
+        } else
+            data = temporary_buffer<char>(std::move(raw.share(i, _lenght)));
     }
 
 public:
     bool fin() { return _fin; }
 
-    unsigned char opcode() { return _opcode; }
+    opcode opcode() { return _opcode; }
 
     uint64_t &length() { return _lenght; }
 
-    bool rsv23() { return _rsv23; }
+    bool rsv2() { return _rsv2; }
+
+    bool rsv3() { return _rsv3; }
 
     bool rsv1() { return _rsv1; }
 
     bool masked() { return _masked; }
 
     bool valid() {
-        return !((rsv1() /*&& !setCompressed(user)*/) || rsv23() || (opcode() > 2 && opcode() < 8) ||
+        return !((rsv1() /*&& !setCompressed(user)*/) || rsv2() || rsv3() || (opcode() > 2 && opcode() < 8) ||
                  opcode() > 10 || (opcode() > 2 && (!fin() || length() > 125)));
     }
 };
