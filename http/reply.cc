@@ -52,6 +52,7 @@ const sstring internal_server_error = " 500 Internal Server Error\r\n";
 const sstring not_implemented = " 501 Not Implemented\r\n";
 const sstring bad_gateway = " 502 Bad Gateway\r\n";
 const sstring service_unavailable = " 503 Service Unavailable\r\n";
+const sstring switching_protocols = " 101 Switching Protocols\r\n";
 
 static const sstring& to_string(reply::status_type status) {
     switch (status) {
@@ -87,6 +88,8 @@ static const sstring& to_string(reply::status_type status) {
         return bad_gateway;
     case reply::status_type::service_unavailable:
         return service_unavailable;
+    case reply::status_type::switching_protocols:
+        return switching_protocols;
     default:
         return internal_server_error;
     }
