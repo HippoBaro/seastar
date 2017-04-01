@@ -44,15 +44,12 @@
 #include <boost/intrusive/list.hpp>
 #include "reply.hh"
 #include "http/routes.hh"
-#include "http/websocket.hh"
 
 #include <cryptopp/sha.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/hex.h>
 #include <cryptopp/base64.h>
-
 #include "core/sleep.hh"
-#include <chrono>
 
 namespace httpd {
 
@@ -152,14 +149,13 @@ namespace httpd {
             http_request_parser _parser;
             std::unique_ptr<request> _req;
             std::unique_ptr<reply> _resp;
-            socket_address _addr;
             // null element marks eof
             queue<std::unique_ptr<reply>> _replies { 10 };bool _done = false;
         public:
             connection(http_server& server, connected_socket&& fd,
                        socket_address addr)
                     : _server(server), _fd(std::move(fd)), _read_buf(_fd.input()), _write_buf(
-                    _fd.output()), _addr(addr) {
+                    _fd.output()) {
                 ++_server._total_connections;
                 ++_server._current_connections;
                 _server._connections.push_back(*this);
@@ -369,7 +365,7 @@ namespace httpd {
                     } else if (it->second.find("Upgrade") != std::string::npos) {
                         auto upgrade = req->_headers.find("Upgrade");
                         if (upgrade != req->_headers.end() && upgrade->second == "websocket")
-                            return upgrade_websocket(std::move(req)).then([] { return true; }); //websocket upgrade
+                            return upgrade_websocket(std::move(req)); //websocket upgrade
                     }
                 }
                 bool should_close;
@@ -390,23 +386,24 @@ namespace httpd {
                 sstring url = set_query_param(*req.get());
                 sstring version = req->_version;
 
-                return _server._routes.handle(url, std::move(req), std::move(resp)).then([this, should_close, version = std::move(version)](std::unique_ptr<reply> rep) {
+                return _server._routes.handle(url, std::move(req), std::move(resp)).
+                        // Caller guarantees enough room
+                        then([this, should_close, version = std::move(version)](std::unique_ptr<reply> rep) {
                     rep->set_version(version).done();
                     this->_replies.push(std::move(rep));
                     return make_ready_future<bool>(should_close);
                 });
             }
 
-            future<> upgrade_websocket(std::unique_ptr<request> req) {
+            future<bool> upgrade_websocket(std::unique_ptr<request> req) {
                 constexpr char websocket_uuid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
                 constexpr size_t websocket_uuid_len = 36;
 
-                sstring url = set_query_param(*req.get());
                 auto resp = std::make_unique<reply>();
                 resp->set_version(req->_version);
 
                 auto it = req->_headers.find("Sec-WebSocket-Key");
-                if (it != req->_headers.end() && _server._routes.get_ws_handler(url, *req.get())) {
+                if (it != req->_headers.end()) {
                     //Success
                     resp->_headers["Upgrade"] = "websocket";
                     resp->_headers["Connection"] = "Upgrade";
@@ -432,15 +429,22 @@ namespace httpd {
                     resp->set_status(reply::status_type::switching_protocols).done();
 
                     _replies.push(std::move(resp));
-                    return do_until([this] {
-                        return _replies.empty();
-                    }, [this] {
-                        //If we don't wait, the HTTP response might not be flushed before user-code start sending messages
-                        //resulting in malformed handcheck response.
-                        return sleep(std::chrono::milliseconds(30)); //FIXME this is awful
-                    }).then([this, req = std::move(req), url] {
-                        auto ws = connected_websocket(&_fd, _addr, *req.get());
-                        return _server._routes.handle_ws(url, std::move(ws));
+                    return repeat([this] {
+                        return _read_buf.read().then([this](auto buf){
+                            std::cout << "read from connection : ";
+                            std::cout.write(buf.begin(), buf.size());
+                            std::cout << std::endl;
+                            for (std::size_t i = 0; i < buf.size(); ++i)
+                                std::cout << std::bitset<8>(buf.begin()[i]) << std::endl;
+                            if (!buf)
+                                return make_ready_future<bool_class<stop_iteration_tag> >(stop_iteration::yes);
+                            return _write_buf.write(std::move(buf)).then([this] { return _write_buf.flush(); }).then([] {
+                                return stop_iteration::no;
+                            });
+                        });
+                    }).then([] {
+                        std::cout << "closing connection" << std::endl;
+                        return true;
                     });
                 }
                 else {
@@ -448,7 +452,8 @@ namespace httpd {
                     resp->set_status(reply::status_type::bad_request);
                 }
                 resp->done();
-                return this->_replies.push_eventually(std::move(resp));
+                this->_replies.push(std::move(resp));
+                return make_ready_future<bool>(true);
             }
 
             future<> write_body() {
@@ -502,8 +507,9 @@ namespace httpd {
         static sstring generate_server_name();
     public:
         http_server_control() : _server_dist(new distributed<http_server>) {
-
         }
+
+
         future<> start(const sstring& name = generate_server_name()) {
             return _server_dist->start(name);
         }

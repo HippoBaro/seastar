@@ -4,82 +4,68 @@
 
 #include "websocket.hh"
 
-httpd::connected_websocket::connected_websocket(connected_socket *socket, socket_address &remote_adress,
-                                                request &request) noexcept : _socket(std::move(socket)),
-                                                                             remote_adress(remote_adress),
-                                                                             _request(request) {
+server_websocket::server_websocket(socket_address sa, listen_options opts) : _sa(sa), _opts(opts) {}
+
+void server_websocket::listen() {
+    _server_socket = engine().listen(_sa, _opts);
 }
 
-httpd::connected_websocket::connected_websocket(httpd::connected_websocket &&cs) noexcept : _socket(std::move(cs._socket)),
-                                                                                            remote_adress(cs.remote_adress),
-                                                                                            _request(std::move(cs._request)) {
+future<connected_websocket> server_websocket::accept() {
+    return _server_socket.accept().then([] (connected_socket sock, socket_address addr) {
+        return connected_websocket(std::move(sock), addr);
+    });
 }
 
-httpd::connected_websocket &httpd::connected_websocket::operator=(httpd::connected_websocket &&cs) noexcept {
+connected_websocket::connected_websocket(connected_socket &&socket,
+                                         socket_address &remote_adress) noexcept : _socket(std::move(socket)), remote_adress(remote_adress) {}
+
+connected_websocket::connected_websocket(connected_websocket &&cs) noexcept : _socket(std::move(cs._socket)), remote_adress(cs.remote_adress) {
+
+}
+
+connected_websocket &connected_websocket::operator=(connected_websocket &&cs) noexcept {
     _socket = std::move(cs._socket);
     remote_adress = std::move(cs.remote_adress);
     return *this;
 }
 
-future<> httpd::websocket_input_stream::read_fragment() {
-    auto parse_fragment = [this] {
-        if (_buf.size() - _index > 2)
-            _fragment = std::move(std::make_unique<inbound_websocket_fragment>(_buf, &_index));
-    };
-
-    _fragment = nullptr;
-    if (!_buf || _index >= _buf.size())
-        return _stream.read().then([this, parse_fragment](temporary_buffer<char> buf) {
-            _buf = std::move(buf);
-            _index = 0;
-            parse_fragment();
-        });
-    parse_fragment();
-    return make_ready_future();
+future<websocket_fragment> websocket_input_stream::readFragment() {
+    return _stream.read().then([] (temporary_buffer<char> buf) {
+        websocket_fragment fragment(std::move(buf));
+        return fragment;
+    });
 }
 
-future<std::unique_ptr<httpd::websocket_message>> httpd::websocket_input_stream::read() {
-    _lastmassage = nullptr;
-    return repeat([this] { // gather all fragments and concatenate full message
-        return read_fragment().then([this] {
-            if (!_fragment || _fragment->_is_empty)
-                return stop_iteration::yes;
-            else if (_fragment->fin()) {
-                if (!_lastmassage)
-                    _lastmassage = std::move(std::make_unique<websocket_message>(std::move(_fragment)));
-                else
-                    _lastmassage->append(std::move(_fragment));
+future<temporary_buffer<char>> websocket_input_stream::read() {
+    _buf.clear();
+    return repeat([this] {
+
+        return readFragment().then([this] (auto fragment) {
+            if (fragment.data){
+                _buf.append(fragment.data.get(), fragment.data.size());
+                if (fragment.fin())
+                    return stop_iteration::yes;
+                return stop_iteration::no;
+            }
+            return stop_iteration::yes;
+        });
+
+/*        return _stream.read().then([this] (temporary_buffer<char> buf) {
+            if (buf) {
+                _buf.append(buf.get(), buf.size());
+                if (buf.get()[0] == 'h')
+                    return stop_iteration::yes;
+                return stop_iteration::no;
+            } else {
                 return stop_iteration::yes;
             }
-            else if (_fragment->opcode() == CONTINUATION)
-                _lastmassage->append(std::move(_fragment));
-            return stop_iteration::no;
         });
-    }).then([this] {
-        return std::move(_lastmassage);
-    });
-}
+*/
 
-/*
- * When the write is called and if (!_buf || _index >= _buf.size()) == false, it would make sense
- * to buff it and flush everything at once before the next read().
- */
-future<> httpd::websocket_output_stream::write(std::unique_ptr<httpd::websocket_message> message) {
-    message->done();
-    return do_with(std::move(message), [this] (std::unique_ptr<httpd::websocket_message> &frag) {
-        temporary_buffer<char> head((char *)&frag->_header, frag->_header_size);
-        return this->_stream.write(std::move(head)).then([this, &frag] {
-            return do_for_each(frag->_fragments, [this] (temporary_buffer<char> &buff) {
-                return this->_stream.write(std::move(buff));
-            });
-        });
     }).then([this] {
-        return this->_stream.flush();
-    }).handle_exception([this] (std::exception_ptr e) {
-        return _stream.close();
+        if (_buf.empty())
+            return make_ready_future<temporary_buffer<char>>();
+        std::cout<<"size is " << _buf.size() << std::endl;
+        return make_ready_future<temporary_buffer<char>>(std::move(temporary_buffer<char>(_buf.c_str(), _buf.size())));
     });
-}
-
-future<> httpd::websocket_output_stream::write(websocket_opcode kind, temporary_buffer<char> buf) {
-    return write(std::move(std::make_unique<websocket_message>(kind, std::move(buf))));
 }
