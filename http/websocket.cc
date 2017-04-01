@@ -20,11 +20,15 @@ httpd::connected_websocket &httpd::connected_websocket::operator=(httpd::connect
 future<httpd::websocket_fragment> httpd::websocket_input_stream::readFragment() {
     return _stream.read().then([] (temporary_buffer<char> buf) {
         websocket_fragment fragment(std::move(buf));
-        return fragment;
+        return std::move(fragment);
     });
 }
 
 future<temporary_buffer<char>> httpd::websocket_input_stream::read() {
+    return readFragment().then([this] (websocket_fragment fragment) {
+        return std::move(fragment.data);
+    });
+/*
     _buf.clear();
     return repeat([this] {
         return readFragment().then([this] (auto fragment) {
@@ -36,6 +40,7 @@ future<temporary_buffer<char>> httpd::websocket_input_stream::read() {
             }
             return stop_iteration::yes;
         });
+*/
 
 /*        return _stream.read().then([this] (temporary_buffer<char> buf) {
             if (buf) {
@@ -49,12 +54,12 @@ future<temporary_buffer<char>> httpd::websocket_input_stream::read() {
         });
 */
 
-    }).then([this] {
+/*    }).then([this] {
         if (_buf.empty())
             return make_ready_future<temporary_buffer<char>>();
         std::cout<<"size is " << _buf.size() << std::endl;
         return make_ready_future<temporary_buffer<char>>(std::move(temporary_buffer<char>(_buf.c_str(), _buf.size())));
-    });
+    });*/
 }
 
 future<temporary_buffer<char>> httpd::websocket_input_stream::readRaw() {
