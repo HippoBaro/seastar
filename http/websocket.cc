@@ -4,42 +4,29 @@
 
 #include "websocket.hh"
 
-server_websocket::server_websocket(socket_address sa, listen_options opts) : _sa(sa), _opts(opts) {}
-
-void server_websocket::listen() {
-    _server_socket = engine().listen(_sa, _opts);
-}
-
-future<connected_websocket> server_websocket::accept() {
-    return _server_socket.accept().then([] (connected_socket sock, socket_address addr) {
-        return connected_websocket(std::move(sock), addr);
-    });
-}
-
-connected_websocket::connected_websocket(connected_socket &&socket,
+httpd::connected_websocket::connected_websocket(connected_socket *socket,
                                          socket_address &remote_adress) noexcept : _socket(std::move(socket)), remote_adress(remote_adress) {}
 
-connected_websocket::connected_websocket(connected_websocket &&cs) noexcept : _socket(std::move(cs._socket)), remote_adress(cs.remote_adress) {
+httpd::connected_websocket::connected_websocket(httpd::connected_websocket &&cs) noexcept : _socket(cs._socket), remote_adress(cs.remote_adress) {
 
 }
 
-connected_websocket &connected_websocket::operator=(connected_websocket &&cs) noexcept {
+httpd::connected_websocket &httpd::connected_websocket::operator=(httpd::connected_websocket &&cs) noexcept {
     _socket = std::move(cs._socket);
     remote_adress = std::move(cs.remote_adress);
     return *this;
 }
 
-future<websocket_fragment> websocket_input_stream::readFragment() {
+future<httpd::websocket_fragment> httpd::websocket_input_stream::readFragment() {
     return _stream.read().then([] (temporary_buffer<char> buf) {
         websocket_fragment fragment(std::move(buf));
         return fragment;
     });
 }
 
-future<temporary_buffer<char>> websocket_input_stream::read() {
+future<temporary_buffer<char>> httpd::websocket_input_stream::read() {
     _buf.clear();
     return repeat([this] {
-
         return readFragment().then([this] (auto fragment) {
             if (fragment.data){
                 _buf.append(fragment.data.get(), fragment.data.size());
@@ -68,4 +55,16 @@ future<temporary_buffer<char>> websocket_input_stream::read() {
         std::cout<<"size is " << _buf.size() << std::endl;
         return make_ready_future<temporary_buffer<char>>(std::move(temporary_buffer<char>(_buf.c_str(), _buf.size())));
     });
+}
+
+future<temporary_buffer<char>> httpd::websocket_input_stream::readRaw() {
+    return this->_stream.read();
+}
+
+future<> httpd::websocket_output_stream::write(temporary_buffer<char> buf) {
+    return this->_stream.write(std::move(buf));
+}
+
+future<> httpd::websocket_output_stream::flush() {
+    return this->_stream.flush();
 }

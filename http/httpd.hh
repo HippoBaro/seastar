@@ -44,12 +44,12 @@
 #include <boost/intrusive/list.hpp>
 #include "reply.hh"
 #include "http/routes.hh"
+#include "http/websocket.hh"
 
 #include <cryptopp/sha.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/hex.h>
 #include <cryptopp/base64.h>
-#include "core/sleep.hh"
 
 namespace httpd {
 
@@ -149,13 +149,14 @@ namespace httpd {
             http_request_parser _parser;
             std::unique_ptr<request> _req;
             std::unique_ptr<reply> _resp;
+            socket_address _addr;
             // null element marks eof
             queue<std::unique_ptr<reply>> _replies { 10 };bool _done = false;
         public:
             connection(http_server& server, connected_socket&& fd,
                        socket_address addr)
                     : _server(server), _fd(std::move(fd)), _read_buf(_fd.input()), _write_buf(
-                    _fd.output()) {
+                    _fd.output()), _addr(addr) {
                 ++_server._total_connections;
                 ++_server._current_connections;
                 _server._connections.push_back(*this);
@@ -430,7 +431,11 @@ namespace httpd {
                     resp->set_status(reply::status_type::switching_protocols).done();
 
                     _replies.push(std::move(resp));
-                    return _server._routes.handle_ws(url, std::move(req), _fd).then_wrapped([] (auto f){
+
+                    auto ws = connected_websocket(&_fd, _addr);
+
+                    return _server._routes.handle_ws(url, std::move(req), std::move(ws)).then_wrapped([] (auto f){
+                        std::cout << "closing websocket" << std::endl;
                         return true;
                     });
                 }

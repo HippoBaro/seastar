@@ -9,6 +9,8 @@
 #include "core/scattered_message.hh"
 #include <net/socket_defs.hh>
 
+namespace httpd {
+
 class websocket_fragment {
     temporary_buffer<char> _raw;
     uint16_t _header;
@@ -35,19 +37,15 @@ public:
         _rsv1 = _header & 64;
         _masked = _header & 32768;
         _lenght = (_header >> 8) & 127;
-        if (_lenght == 126)
-        {
+        if (_lenght == 126) {
             _lenght = *((uint16_t *) _raw.share(i, sizeof(uint16_t)).get());
             i += sizeof(uint16_t);
-        }
-        else if (_lenght == 127)
-        {
+        } else if (_lenght == 127) {
             _lenght = *((uint64_t *) _raw.share(i, sizeof(uint64_t)).get());
             i += sizeof(uint64_t);
         }
 
-        if (_masked)
-        {
+        if (_masked) {
             _maskkey = *((uint16_t *) _raw.share(i, sizeof(uint32_t)).get());
             i += sizeof(uint32_t);
         }
@@ -57,10 +55,15 @@ public:
 
 public:
     bool fin() { return _fin; }
+
     unsigned char opcode() { return _opcode; }
+
     uint64_t &length() { return _lenght; }
+
     bool rsv23() { return _rsv23; }
+
     bool rsv1() { return _rsv1; }
+
     bool masked() { return _masked; }
 
     bool valid() {
@@ -83,9 +86,12 @@ class websocket_output_stream final {
     std::exception_ptr _ex;
 public:
     websocket_output_stream() = default;
+
     websocket_output_stream(output_stream<char> stream) : _stream(std::move(stream)) {}
-    websocket_output_stream(websocket_output_stream&&) = default;
-    websocket_output_stream& operator=(websocket_output_stream&&) = default;
+
+    websocket_output_stream(websocket_output_stream &&) = default;
+
+    websocket_output_stream &operator=(websocket_output_stream &&) = default;
 
     //future<> write(const char* buf, size_t n);
     //future<> write(const char* buf);
@@ -95,8 +101,8 @@ public:
 
     //future<> write(net::packet p);
     //future<> write(scattered_message<char> msg);
-    //future<> write(temporary_buffer<char_type>);
-    //future<> flush();
+    future<> write(temporary_buffer<char>);
+    future<> flush();
     future<> close() { return _stream.close(); };
 private:
     friend class reactor;
@@ -108,20 +114,29 @@ class websocket_input_stream final {
     bool _eof = false;
 private:
     using tmp_buf = temporary_buffer<char>;
+
     size_t available() const { return _buf.size(); }
+
 protected:
     void reset() { _buf = {}; }
+
 public:
     websocket_input_stream() = default;
+
     explicit websocket_input_stream(input_stream<char> stream) : _stream(std::move(stream)), _buf("") {}
-    websocket_input_stream(websocket_input_stream&&) = default;
-    websocket_input_stream& operator=(websocket_input_stream&&) = default;
+
+    websocket_input_stream(websocket_input_stream &&) = default;
+
+    websocket_input_stream &operator=(websocket_input_stream &&) = default;
 
     bool eof() { return _eof; }
 
     future<websocket_fragment> readFragment();
 
     future<temporary_buffer<char>> read();
+
+    future<temporary_buffer<char>> readRaw();
+
     future<> close() { return _stream.close(); }
 
     /// Ignores n next bytes from the stream.
@@ -130,35 +145,24 @@ public:
 
 class connected_websocket {
 private:
-    connected_socket _socket;
+    connected_socket *_socket;
 public:
     socket_address remote_adress;
-    connected_websocket(connected_socket &&_socket, socket_address &remote_adress) noexcept;
 
-    connected_websocket(connected_websocket&& cs) noexcept;
-    connected_websocket& operator=(connected_websocket&& cs) noexcept;
+    connected_websocket(connected_socket *socket, socket_address &remote_adress) noexcept;
+
+    connected_websocket(connected_websocket &&cs) noexcept;
+
+    connected_websocket &operator=(connected_websocket &&cs) noexcept;
 
     websocket_input_stream input() {
-        return websocket_input_stream(std::move(_socket.input()));
+        return websocket_input_stream(std::move(_socket->input()));
     }
 
     websocket_output_stream output() {
-        return websocket_output_stream(std::move(_socket.output()));
+        return websocket_output_stream(std::move(_socket->output()));
     }
 };
-
-class server_websocket {
-
-private:
-    socket_address _sa;
-    listen_options _opts;
-    server_socket _server_socket;
-
-public:
-    server_websocket(socket_address sa, listen_options opts = {});
-
-    void listen();
-    future<connected_websocket> accept();
-};
+}
 
 #endif //SEASTARPLAYGROUND_WEBSOCKET_HPP

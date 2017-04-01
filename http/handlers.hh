@@ -26,6 +26,7 @@
 #include "common.hh"
 #include "reply.hh"
 #include "core/future-util.hh"
+#include "websocket.hh"
 
 #include <unordered_map>
 #include <net/api.hh>
@@ -86,7 +87,7 @@ public:
      * @param req the original request
      * @param rep the reply
      */
-    virtual future<> handle(const sstring& path, std::unique_ptr<request> req, connected_socket &ws) = 0;
+    virtual future<> handle(const sstring& path, std::unique_ptr<request> req, connected_websocket ws) = 0;
 
     virtual ~handler_websocket_base() = default;
 

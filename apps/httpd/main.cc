@@ -21,6 +21,7 @@
 
 #include "http/httpd.hh"
 #include "http/handlers.hh"
+#include "http/websocket_handler.hh"
 #include "http/function_handlers.hh"
 #include "http/file_handler.hh"
 #include "apps/httpd/demo.json.hh"
@@ -48,6 +49,32 @@ void set_routes(routes& r) {
     function_handler* h2 = new function_handler([](std::unique_ptr<request> req) {
         return make_ready_future<json::json_return_type>("json-future");
     });
+
+    websocket_handler* ws1 = new websocket_handler([](std::unique_ptr<request> req, connected_websocket ws) {
+        auto input = ws.input();
+        auto output = ws.output();
+        return do_with(std::move(input), std::move(output), [] (websocket_input_stream &input,
+                                                                websocket_output_stream &output){
+            return repeat([&input, &output] {
+                return input.readRaw().then([&output](temporary_buffer<char> buf){
+                    std::cout << "read from connection : ";
+                    std::cout.write(buf.begin(), buf.size());
+                    std::cout << std::endl;
+                    for (std::size_t i = 0; i < buf.size(); ++i)
+                        std::cout << std::bitset<8>(buf.begin()[i]) << std::endl;
+                    if (!buf)
+                        return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
+                    //return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::no);
+                    return output.write(std::move(buf)).then([&output] { return output.flush(); }).then([] {
+                        return stop_iteration::no;
+                    });
+                });
+            }).then([] {std::cout << "exit" << std::endl;});
+        });
+
+    });
+
+    r.put_ws("/", ws1);
     r.add(operation_type::GET, url("/"), h1);
     r.add(operation_type::GET, url("/jf"), h2);
     r.add(operation_type::GET, url("/file").remainder("path"),
