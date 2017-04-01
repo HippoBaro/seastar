@@ -108,6 +108,17 @@ future<std::unique_ptr<reply> > routes::handle(const sstring& path, std::unique_
     return make_ready_future<std::unique_ptr<reply>>(std::move(rep));
 }
 
+future<> routes::handle_ws(const sstring &path, std::unique_ptr<request> req, connected_socket &ws) {
+    handler_websocket_base* handler = get_ws_handler(normalize_url(path), req);
+    if (handler != nullptr) {
+        for (auto& i : handler->_mandatory_param) {
+            verify_param(*req.get(), i);
+        }
+        return handler->handle(path, std::move(req), ws);
+    }
+    return make_ready_future();
+}
+
 sstring routes::normalize_url(const sstring& url) {
     if (url.length() < 2 || url.at(url.length() - 1) != '/') {
         return url;
@@ -129,6 +140,22 @@ handler_base* routes::get_handler(operation_type type, const sstring& url,
             return handler;
         }
         params.clear();
+    }
+    return nullptr;
+}
+
+handler_websocket_base *routes::get_ws_handler(const sstring &url, std::unique_ptr<request> &req) {
+    handler_websocket_base* handler = (_map_ws.find(url) == _map_ws.end()) ? nullptr : _map_ws[url];
+    if (handler != nullptr) {
+        try {
+            for (auto& i : handler->_mandatory_param) {
+                verify_param(*req.get(), i);
+            }
+        }
+        catch (const missing_param_exception &e) {
+            return nullptr;
+        }
+        return handler;
     }
     return nullptr;
 }

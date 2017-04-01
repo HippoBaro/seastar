@@ -399,11 +399,12 @@ namespace httpd {
                 constexpr char websocket_uuid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
                 constexpr size_t websocket_uuid_len = 36;
 
+                sstring url = set_query_param(*req.get());
                 auto resp = std::make_unique<reply>();
                 resp->set_version(req->_version);
 
                 auto it = req->_headers.find("Sec-WebSocket-Key");
-                if (it != req->_headers.end()) {
+                if (it != req->_headers.end() && _server._routes.get_ws_handler(url, req)) {
                     //Success
                     resp->_headers["Upgrade"] = "websocket";
                     resp->_headers["Connection"] = "Upgrade";
@@ -429,21 +430,7 @@ namespace httpd {
                     resp->set_status(reply::status_type::switching_protocols).done();
 
                     _replies.push(std::move(resp));
-                    return repeat([this] {
-                        return _read_buf.read().then([this](auto buf){
-                            std::cout << "read from connection : ";
-                            std::cout.write(buf.begin(), buf.size());
-                            std::cout << std::endl;
-                            for (std::size_t i = 0; i < buf.size(); ++i)
-                                std::cout << std::bitset<8>(buf.begin()[i]) << std::endl;
-                            if (!buf)
-                                return make_ready_future<bool_class<stop_iteration_tag> >(stop_iteration::yes);
-                            return _write_buf.write(std::move(buf)).then([this] { return _write_buf.flush(); }).then([] {
-                                return stop_iteration::no;
-                            });
-                        });
-                    }).then([] {
-                        std::cout << "closing connection" << std::endl;
+                    return _server._routes.handle_ws(url, std::move(req), _fd).then_wrapped([] (auto f){
                         return true;
                     });
                 }
