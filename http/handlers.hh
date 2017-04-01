@@ -87,7 +87,7 @@ public:
      * @param req the original request
      * @param rep the reply
      */
-    virtual future<> handle(const sstring& path, connected_websocket ws) = 0;
+    virtual future<> handle(const sstring& path, std::unique_ptr<request> req, connected_socket &ws) = 0;
 
     virtual ~handler_websocket_base() = default;
 
