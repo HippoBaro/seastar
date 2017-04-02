@@ -9,22 +9,21 @@
 
 namespace httpd {
 
-    class websocket_fragment_base {
-    public:
-        enum opcode : uint8_t {
-            CONTINUATION = 0x0,
-            TEXT = 0x1,
-            BINARY = 0x2,
-            CLOSE = 0x8,
-            PING = 0x9,
-            PONG = 0xA,
-            RESERVED = 0xB
-        };
+    enum websocket_opcode : uint8_t {
+        CONTINUATION = 0x0,
+        TEXT = 0x1,
+        BINARY = 0x2,
+        CLOSE = 0x8,
+        PING = 0x9,
+        PONG = 0xA,
+        RESERVED = 0xB
+    };
 
+    class websocket_fragment_base {
     protected:
 
         bool _fin;
-        enum opcode _opcode = RESERVED;
+        websocket_opcode _opcode = RESERVED;
         uint64_t _lenght;
         bool _rsv2;
         bool _rsv3;
@@ -35,9 +34,7 @@ namespace httpd {
     public:
         temporary_buffer<char> message;
 
-        websocket_fragment_base() = default;
-
-        websocket_fragment_base(websocket_fragment_base &) = delete;
+        websocket_fragment_base() {}
 
         websocket_fragment_base(websocket_fragment_base &&fragment) noexcept : _fin(fragment.fin()),
                                                                                _opcode(fragment.opcode()),
@@ -53,7 +50,7 @@ namespace httpd {
     public:
         bool fin() { return _fin; }
 
-        opcode opcode() { return _opcode; }
+        websocket_opcode opcode() { return _opcode; }
 
         uint64_t &length() { return _lenght; }
 
@@ -74,32 +71,35 @@ namespace httpd {
     class inbound_websocket_fragment : public websocket_fragment_base {
 
     public:
-        inbound_websocket_fragment() = delete;
-        inbound_websocket_fragment(inbound_websocket_fragment &) = delete;
-        inbound_websocket_fragment(inbound_websocket_fragment &&other) : websocket_fragment_base(std::move(other)) {
+        inbound_websocket_fragment(inbound_websocket_fragment &&other) noexcept : websocket_fragment_base(std::move(other)) {
         }
 
-        inbound_websocket_fragment(temporary_buffer<char> &&raw);
+        inbound_websocket_fragment(temporary_buffer<char> raw);
     };
 
     class outbound_websocket_fragment : public websocket_fragment_base {
 
     public:
 
-        outbound_websocket_fragment() = delete;
-        outbound_websocket_fragment(outbound_websocket_fragment &) = delete;
-        outbound_websocket_fragment(outbound_websocket_fragment &&other) : websocket_fragment_base(std::move(other)) {
+        outbound_websocket_fragment(outbound_websocket_fragment &&other) noexcept : websocket_fragment_base(std::move(other)) {
         }
-        outbound_websocket_fragment(opcode opcode, temporary_buffer<char> &&response) : message(std::move(response)),
-                                                                                        _lenght(response.size()),
-                                                                                        _fin(true), _masked(false) {
+        outbound_websocket_fragment(websocket_opcode opcode, temporary_buffer<char> response) {
+            std::cout << "Creating response fragment" << std::endl;
+            _opcode = opcode;
+            message = std::move(response);
+            _lenght = message.size();
+            _fin = true;
+            _masked = false;
+            _rsv1 = false;
+            _rsv2 = false;
+            _rsv3 = false;
         }
 
         temporary_buffer<char> get_header();
 
         void set_fin(bool fin) { _fin = fin; }
 
-        void set_opcode(opcode opcode) { _opcode = opcode; };
+        void set_opcode(websocket_opcode opcode) { _opcode = opcode; };
 
         void set_rsv2(bool rsv2) { _rsv2 = rsv2; } ;
 
@@ -111,13 +111,21 @@ namespace httpd {
         char get_header_internal() {
             std::bitset<8> firstpart;
             firstpart.set();
-            firstpart[7] = _fin;
-            firstpart[6] = _rsv1;
-            firstpart[5] = _rsv2;
-            firstpart[4] = _rsv3;
-            std::bitset<8> secondpart(_opcode);
-            firstpart.set(7).set(6).set(5).set(4);
-            return (char) (firstpart ^ secondpart).to_ulong();
+            std::cout << "fin : " << fin() << std::endl;
+            firstpart[7] = fin();
+            std::cout << "rsv1 : " << rsv1() << std::endl;
+            firstpart[6] = rsv1();
+            std::cout << "rsv2 : " << rsv2() << std::endl;
+            firstpart[5] = rsv2();
+            std::cout << "rsv3 : " << rsv3() << std::endl;
+            firstpart[4] = rsv3();
+            std::cout << "opcode : " << opcode() << std::endl;
+            std::bitset<8> secondpart(opcode());
+            secondpart.set(7).set(6).set(5).set(4);
+            std::cout << "header line 1 opcode : " << firstpart << std::endl;
+            std::cout << "header line 1 flags : " << secondpart << std::endl;
+            std::cout << "xor : " << (firstpart ^ secondpart) << std::endl;
+            return static_cast<unsigned char>((firstpart & secondpart).to_ulong());
         }
     };
 

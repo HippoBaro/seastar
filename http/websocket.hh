@@ -7,6 +7,7 @@
 
 #include <core/reactor.hh>
 #include <net/socket_defs.hh>
+#include "websocket_fragment.hh"
 
 namespace httpd {
 
@@ -39,8 +40,7 @@ public:
 
     //future<> write(net::packet p);
     //future<> write(scattered_message<char> msg);
-    future<> write(temporary_buffer<char>);
-    future<> flush();
+    future<> write(websocket_opcode kind, temporary_buffer<char>);
     future<> close() { return _stream.close(); };
 private:
     friend class reactor;
@@ -48,7 +48,8 @@ private:
 
 class websocket_input_stream final {
     input_stream<char> _stream;
-    std::string _buf = "";
+    sstring _buf;
+    temporary_buffer<char> _lastmassage;
     bool _eof = false;
 private:
     using tmp_buf = temporary_buffer<char>;

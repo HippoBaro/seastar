@@ -23,7 +23,7 @@
 |                     Payload Data continued ...                |
 +---------------------------------------------------------------+
 */
-httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<char> &&raw) {
+httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<char> raw) {
     uint64_t i = sizeof(uint16_t);
 
     for (std::size_t i = 0; i < raw.size(); ++i)
@@ -39,7 +39,7 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
     std::cout << "rsv2 : " << rsv2() << std::endl;
     _rsv3 = header.test(4);
     std::cout << "rsv3 : " << rsv3() << std::endl;
-    _opcode = static_cast<enum opcode>(header.reset(7).reset(6).reset(5).reset(4).to_ulong());
+    _opcode = static_cast<websocket_opcode>(header.reset(7).reset(6).reset(5).reset(4).to_ulong());
     std::cout << "opcode : " << _opcode << std::endl;
 
     header = std::bitset<8>(raw.begin()[1]);
@@ -70,45 +70,52 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
 
         message = temporary_buffer<char>(std::move(raw.share(i, _lenght)));
         for (uint64_t j = 0; j < _lenght; ++j)
-        {
-            std::cout << "----------" << std::endl;
-            std::bitset<8> dat(message[j]);
-            std::bitset<8> key(_maskkey[j%4]);
-            std::cout << dat << " ^ " << key << " --> " << (dat ^ key) << std::endl;
-            std::cout << message[j] << " --> " << (char)(message[j] ^ _maskkey[j%4]) << std::endl;
             message.get_write()[j] = message[j] ^ _maskkey[j%4];
-        }
         std::cout << std::endl;
     } else
         message = temporary_buffer<char>(std::move(raw.share(i, _lenght)));
+    std::cout << "END PARSING OF FRAGMENT" << std::endl;
 }
 
 temporary_buffer<char> httpd::outbound_websocket_fragment::get_header() {
+    auto header = get_header_internal();
+    std::cout << "payload lenght : " << _lenght << std::endl;
     if (_lenght < 125) { //Size fits 7bits
         temporary_buffer<char> buff(2);
-        buff[0] = get_header_internal();
-        std::bitset<8> byte2(_lenght);
+        buff.get_write()[0] = header;
+        std::bitset<8> byte2(static_cast<unsigned char>(_lenght));
+        std::cout << "byte2 : " << byte2 << std::endl;
         byte2[7] = _masked;
-        buff[1] = (char) byte2.to_ulong();
+        buff.get_write()[1] = static_cast<unsigned char>(byte2.to_ulong());
+
+        for(auto c : buff){
+            std::bitset<8> bitset(c);
+            std::cout << bitset << std::endl;
+        }
+
+        for(auto c : message){
+            std::bitset<8> bitset(c);
+            std::cout << bitset << std::endl;
+        }
 
         return std::move(buff);
     } //Size in extended to 16bits
-    else if (_lenght < std::numeric_limits::max()) {
+    else if (_lenght < std::numeric_limits<uint16_t>::max()) {
         temporary_buffer<char> buff(4);
-        buff[0] = get_header_internal();
+        buff.get_write()[0] = header;
         std::bitset<8> byte2(126);
         byte2[7] = _masked;
-        buff[1] = (char) byte2.to_ulong();
+        buff.get_write()[1] = static_cast<unsigned char>(byte2.to_ulong());
         std::memcpy(buff.share(2, 2).get_write(), &_lenght, 2);
 
         return std::move(buff);
     }
     else { //Size extended to 64bits
         temporary_buffer<char> buff(10);
-        buff[0] = get_header_internal();
+        buff.get_write()[0] = header;
         std::bitset<8> byte2(126);
         byte2[7] = _masked;
-        buff[1] = (char) byte2.to_ulong();
+        buff.get_write()[1] = static_cast<unsigned char>(byte2.to_ulong());
         std::memcpy(buff.share(2, 8).get_write(), &_lenght, 8);
 
         return std::move(buff);

@@ -65,7 +65,7 @@ void set_routes(routes& r) {
                     if (!buf)
                         return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
                     //return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::no);
-                    return output.write(std::move(buf)).then([&output] { return output.flush(); }).then([] {
+                    return output.write(websocket_opcode::TEXT, std::move(buf)).then([] {
                         return stop_iteration::no;
                     });
                 });
