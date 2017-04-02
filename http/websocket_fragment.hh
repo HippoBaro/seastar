@@ -84,7 +84,6 @@ namespace httpd {
         outbound_websocket_fragment(outbound_websocket_fragment &&other) noexcept : websocket_fragment_base(std::move(other)) {
         }
         outbound_websocket_fragment(websocket_opcode opcode, temporary_buffer<char> response) {
-            std::cout << "Creating response fragment" << std::endl;
             _opcode = opcode;
             message = std::move(response);
             _lenght = message.size();
@@ -111,20 +110,12 @@ namespace httpd {
         char get_header_internal() {
             std::bitset<8> firstpart;
             firstpart.set();
-            std::cout << "fin : " << fin() << std::endl;
             firstpart[7] = fin();
-            std::cout << "rsv1 : " << rsv1() << std::endl;
             firstpart[6] = rsv1();
-            std::cout << "rsv2 : " << rsv2() << std::endl;
             firstpart[5] = rsv2();
-            std::cout << "rsv3 : " << rsv3() << std::endl;
             firstpart[4] = rsv3();
-            std::cout << "opcode : " << opcode() << std::endl;
             std::bitset<8> secondpart(opcode());
             secondpart.set(7).set(6).set(5).set(4);
-            std::cout << "header line 1 opcode : " << firstpart << std::endl;
-            std::cout << "header line 1 flags : " << secondpart << std::endl;
-            std::cout << "xor : " << (firstpart ^ secondpart) << std::endl;
             return static_cast<unsigned char>((firstpart & secondpart).to_ulong());
         }
     };

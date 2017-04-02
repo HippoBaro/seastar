@@ -57,21 +57,14 @@ void set_routes(routes& r) {
                                                                 websocket_output_stream &output){
             return repeat([&input, &output] {
                 return input.read().then([&output](temporary_buffer<char> buf){
-                    std::cout << "read from connection : ";
-                    std::cout.write(buf.begin(), buf.size());
-                    std::cout << std::endl;
-                    /*for (std::size_t i = 0; i < buf.size(); ++i)
-                        std::cout << std::bitset<8>(buf.begin()[i]) << std::endl;*/
                     if (!buf)
                         return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
-                    //return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::no);
                     return output.write(websocket_opcode::TEXT, std::move(buf)).then([] {
                         return stop_iteration::no;
                     });
                 });
-            }).then([] {std::cout << "exit" << std::endl;});
+            });
         });
-
     });
 
     r.put_ws("/", ws1);

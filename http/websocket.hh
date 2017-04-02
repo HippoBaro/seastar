@@ -15,14 +15,6 @@ class websocket_output_stream final {
     output_stream<char> _stream;
     temporary_buffer<char> _buf;
     size_t _size = 0;
-    size_t _begin = 0;
-    size_t _end = 0;
-    bool _trim_to_size = false;
-    bool _batch_flushes = false;
-    std::experimental::optional<promise<>> _in_batch;
-    bool _flush = false;
-    bool _flushing = false;
-    std::exception_ptr _ex;
 public:
     websocket_output_stream() = default;
 
@@ -74,12 +66,7 @@ public:
 
     future<temporary_buffer<char>> read();
 
-    future<temporary_buffer<char>> readRaw();
-
     future<> close() { return _stream.close(); }
-
-    /// Ignores n next bytes from the stream.
-    //future<> skip(uint64_t n);
 };
 
 class connected_websocket {
