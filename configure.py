@@ -360,7 +360,8 @@ http = ['http/transformers.cc',
         'http/reply.cc',
         'http/request_parser.rl',
         'http/api_docs.cc',
-        'http/websocket.cc'
+        'http/websocket.cc',
+        'http/websocket_fragment.cc'
         ]
 
 boost_test_lib = [
