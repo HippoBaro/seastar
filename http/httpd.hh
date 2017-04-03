@@ -432,8 +432,8 @@ namespace httpd {
 
                     _replies.push(std::move(resp));
 
-                    auto ws = connected_websocket(&_fd, _addr);
-                    return _server._routes.handle_ws(url, std::move(req), std::move(ws)).then_wrapped([] (auto f){
+                    auto ws = connected_websocket(&_fd, _addr, std::move(std::move(req)));
+                    return _server._routes.handle_ws(url, std::move(ws)).then_wrapped([] (auto f){
                         std::cout << "closing websocket" << std::endl;
                         return true;
                     });
