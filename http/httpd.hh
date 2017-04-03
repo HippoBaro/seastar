@@ -366,7 +366,7 @@ namespace httpd {
                     } else if (it->second.find("Upgrade") != std::string::npos) {
                         auto upgrade = req->_headers.find("Upgrade");
                         if (upgrade != req->_headers.end() && upgrade->second == "websocket")
-                            return upgrade_websocket(std::move(req)); //websocket upgrade
+                            return upgrade_websocket(std::move(req)).then([] { return true; }); //websocket upgrade
                     }
                 }
                 bool should_close;
@@ -396,7 +396,7 @@ namespace httpd {
                 });
             }
 
-            future<bool> upgrade_websocket(std::unique_ptr<request> req) {
+            future<> upgrade_websocket(std::unique_ptr<request> req) {
                 constexpr char websocket_uuid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
                 constexpr size_t websocket_uuid_len = 36;
 
@@ -431,20 +431,16 @@ namespace httpd {
                     resp->set_status(reply::status_type::switching_protocols).done();
 
                     _replies.push(std::move(resp));
-
                     auto ws = connected_websocket(&_fd, _addr, std::move(std::move(req)));
-                    return _server._routes.handle_ws(url, std::move(ws)).then_wrapped([] (auto f){
-                        std::cout << "closing websocket" << std::endl;
-                        return true;
-                    });
+                    return _server._routes.handle_ws(url, std::move(ws));
+
                 }
                 else {
                     //Refused
                     resp->set_status(reply::status_type::bad_request);
                 }
                 resp->done();
-                this->_replies.push(std::move(resp));
-                return make_ready_future<bool>(true);
+                return this->_replies.push_eventually(std::move(resp));
             }
 
             future<> write_body() {
