@@ -55,7 +55,6 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
         message = temporary_buffer<char>(std::move(raw.share(i, _lenght)));
         for (uint64_t j = 0; j < _lenght; ++j)
             message.get_write()[j] = message[j] ^ _maskkey[j%4];
-        std::cout << std::endl;
     } else
         message = temporary_buffer<char>(std::move(raw.share(i, _lenght)));
 }

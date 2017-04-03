@@ -8,6 +8,7 @@
 #include <core/reactor.hh>
 #include <net/socket_defs.hh>
 #include "websocket_fragment.hh"
+#include "request.hh"
 
 namespace httpd {
 
@@ -72,10 +73,12 @@ public:
 class connected_websocket {
 private:
     connected_socket *_socket;
+
 public:
     socket_address remote_adress;
+    std::unique_ptr<request> _request;
 
-    connected_websocket(connected_socket *socket, socket_address &remote_adress) noexcept;
+    connected_websocket(connected_socket *socket, socket_address &remote_adress, std::unique_ptr<request> request) noexcept;
 
     connected_websocket(connected_websocket &&cs) noexcept;
 

@@ -50,7 +50,7 @@ void set_routes(routes& r) {
         return make_ready_future<json::json_return_type>("json-future");
     });
 
-    websocket_handler* ws1 = new websocket_handler([](std::unique_ptr<request> req, connected_websocket ws) {
+    websocket_function_handler* ws1 = new websocket_function_handler([](std::unique_ptr<request> req, connected_websocket ws) {
         auto input = ws.input();
         auto output = ws.output();
         return do_with(std::move(input), std::move(output), [] (websocket_input_stream &input,
@@ -67,7 +67,25 @@ void set_routes(routes& r) {
         });
     });
 
+    auto ws_managed_handler = new websocket_handler();
+
+    ws_managed_handler->on_connection([] (std::unique_ptr<request>* req, connected_websocket* ws) {
+        std::cout << "new connection !" << std::endl;
+        return make_ready_future();
+    });
+
+    ws_managed_handler->on_message([] (std::unique_ptr<request>* req, connected_websocket* ws, temporary_buffer<char> message) {
+        std::cout << "echoing" << std::endl;
+        return ws->output().write(websocket_opcode::TEXT, std::move(message));
+    });
+
+    ws_managed_handler->on_disconnection([] (std::unique_ptr<request>* req, connected_websocket* ws) {
+        std::cout << "client disconnected !" << std::endl;
+        return make_ready_future();
+    });
+
     r.put_ws("/", ws1);
+    r.put_ws("/managed", ws_managed_handler);
     r.add(operation_type::GET, url("/"), h1);
     r.add(operation_type::GET, url("/jf"), h2);
     r.add(operation_type::GET, url("/file").remainder("path"),

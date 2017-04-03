@@ -159,7 +159,7 @@ public:
      * @param req the http request
      * @param rep the http reply
      */
-    future<> handle_ws(const sstring& path, std::unique_ptr<request> req, connected_websocket ws);
+    future<> handle_ws(const sstring& path, connected_websocket ws);
 
     /**
      * Search and return a handler by the operation type and url
