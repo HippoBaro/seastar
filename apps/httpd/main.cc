@@ -81,12 +81,13 @@ void set_routes(routes& r) {
         return make_ready_future(); //FIXME allow void
     });
 
-    r.put_ws("/managed", ws1);
-    r.put_ws("/", ws_managed_handler);
     r.add(operation_type::GET, url("/"), h1);
     r.add(operation_type::GET, url("/jf"), h2);
-    r.add(operation_type::GET, url("/file").remainder("path"),
-            new directory_handler("/"));
+    r.add(operation_type::GET, url("/file").remainder("path"), new directory_handler("/"));
+    r.put_ws("/managed", ws_managed_handler);
+    r.put_ws("/", ws1);
+
+
     demo_json::hello_world.set(r, [] (const_req req) {
         demo_json::my_object obj;
         obj.var1 = req.param.at("var1");
