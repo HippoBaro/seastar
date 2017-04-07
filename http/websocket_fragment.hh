@@ -22,19 +22,21 @@ namespace httpd {
     class websocket_fragment_base {
     protected:
 
-        bool _fin;
+        bool _fin = false;
         websocket_opcode _opcode = RESERVED;
-        uint64_t _lenght;
-        bool _rsv2;
-        bool _rsv3;
-        bool _rsv1;
-        bool _masked;
+        uint64_t _lenght = 0;
+        bool _rsv2 = false;
+        bool _rsv3 = false;
+        bool _rsv1 = false;
+        bool _masked = false;
         temporary_buffer<char> _maskkey;
 
     public:
+        bool _is_empty = false;
         temporary_buffer<char> message;
 
-        websocket_fragment_base() {}
+
+        websocket_fragment_base() : _is_empty(true) {}
 
         websocket_fragment_base(websocket_fragment_base &&fragment) noexcept : _fin(fragment.fin()),
                                                                                _opcode(fragment.opcode()),
@@ -44,6 +46,7 @@ namespace httpd {
                                                                                _rsv1(fragment.rsv1()),
                                                                                _masked(fragment.masked()),
                                                                                _maskkey(std::move(fragment._maskkey)),
+                                                                               _is_empty(fragment._is_empty),
                                                                                message(std::move(fragment.message)) {
         }
 
@@ -66,6 +69,8 @@ namespace httpd {
             return !((rsv1() /*&& !setCompressed(user)*/) || rsv2() || rsv3() || (opcode() > 2 && opcode() < 8) ||
                      opcode() > 10 || (opcode() > 2 && (!fin() || length() > 125)));
         }
+
+        operator bool() const { return !_is_empty; }
     };
 
     class inbound_websocket_fragment : public websocket_fragment_base {
@@ -75,6 +80,8 @@ namespace httpd {
         }
 
         inbound_websocket_fragment(temporary_buffer<char> raw);
+
+        inbound_websocket_fragment() : websocket_fragment_base() {}
     };
 
     class outbound_websocket_fragment : public websocket_fragment_base {

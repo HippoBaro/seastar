@@ -168,7 +168,7 @@ public:
      * @param params a parameter object that will be filled during the match
      * @return a handler based on the type/url match
      */
-    handler_websocket_base* get_ws_handler(const sstring& url, std::unique_ptr<request> &req);
+    handler_websocket_base* get_ws_handler(const sstring& url, const httpd::request& req);
 
     /**
      * Search and return an exact match

@@ -51,6 +51,9 @@
 #include <cryptopp/hex.h>
 #include <cryptopp/base64.h>
 
+#include "core/sleep.hh"
+#include <chrono>
+
 namespace httpd {
 
     class http_server;
@@ -387,9 +390,7 @@ namespace httpd {
                 sstring url = set_query_param(*req.get());
                 sstring version = req->_version;
 
-                return _server._routes.handle(url, std::move(req), std::move(resp)).
-                        // Caller guarantees enough room
-                        then([this, should_close, version = std::move(version)](std::unique_ptr<reply> rep) {
+                return _server._routes.handle(url, std::move(req), std::move(resp)).then([this, should_close, version = std::move(version)](std::unique_ptr<reply> rep) {
                     rep->set_version(version).done();
                     this->_replies.push(std::move(rep));
                     return make_ready_future<bool>(should_close);
@@ -405,7 +406,7 @@ namespace httpd {
                 resp->set_version(req->_version);
 
                 auto it = req->_headers.find("Sec-WebSocket-Key");
-                if (it != req->_headers.end() && _server._routes.get_ws_handler(url, req)) {
+                if (it != req->_headers.end() && _server._routes.get_ws_handler(url, *req.get())) {
                     //Success
                     resp->_headers["Upgrade"] = "websocket";
                     resp->_headers["Connection"] = "Upgrade";
@@ -431,9 +432,21 @@ namespace httpd {
                     resp->set_status(reply::status_type::switching_protocols).done();
 
                     _replies.push(std::move(resp));
-                    auto ws = connected_websocket(&_fd, _addr, std::move(std::move(req)));
-                    return _server._routes.handle_ws(url, std::move(ws));
+                    return do_until([this] {
+                        return _replies.empty();
+                    }, [] {
+                        std::cout << "waiting for response to go.." << std::endl;
+                        return make_ready_future();
+                    }).then([this, req = std::move(req), url] {
+                        auto ws = connected_websocket(&_fd, _addr, *req.get());
+                        return _server._routes.handle_ws(url, std::move(ws));
+                    });
 
+/*                    return do_with(std::move(req), [this, url, resp2 = std::move(resp)] (std::unique_ptr<request>& req) {
+                        return _replies.push_eventually(std::move(resp2)).then([this, &req, url] {
+
+                        });
+                    }).then([] {return make_ready_future();});*/
                 }
                 else {
                     //Refused

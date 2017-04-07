@@ -50,7 +50,7 @@ void set_routes(routes& r) {
         return make_ready_future<json::json_return_type>("json-future");
     });
 
-    websocket_function_handler* ws1 = new websocket_function_handler([](std::unique_ptr<request> req, connected_websocket ws) {
+    websocket_function_handler* ws1 = new websocket_function_handler([](const httpd::request& req, connected_websocket ws) {
         auto input = ws.input();
         auto output = ws.output();
         return do_with(std::move(input), std::move(output), [] (websocket_input_stream &input,
@@ -69,16 +69,22 @@ void set_routes(routes& r) {
 
     auto ws_managed_handler = new websocket_handler();
 
-    ws_managed_handler->on_connection([] (std::unique_ptr<request>* req, websocket_output_stream* ws) {
-        return make_ready_future(); //FIXME allow void
+    ws_managed_handler->on_connection([] (const httpd::request& req, websocket_output_stream* ws) {
+        std::cout << "New connection" << std::endl;
+/*        temporary_buffer<char> test("hello", 5);
+        return ws->write(TEXT, std::move(test)).then_wrapped([] (future<> f) {
+            if (f.failed())
+                std::cout << "Error ! " << std::endl;
+            //return make_ready_future();
+        });*/
     });
 
-    ws_managed_handler->on_message([] (std::unique_ptr<request>* req, websocket_output_stream* ws, temporary_buffer<char> message) {
-        return ws->write(websocket_opcode::TEXT, std::move(message)); //FIXME allow void
+    ws_managed_handler->on_message_future([] (const httpd::request& req, websocket_output_stream* ws, temporary_buffer<char> message) {
+        return ws->write(websocket_opcode::TEXT, std::move(message));
     });
 
-    ws_managed_handler->on_disconnection([] (std::unique_ptr<request>* req, websocket_output_stream* ws) {
-        return make_ready_future(); //FIXME allow void
+    ws_managed_handler->on_disconnection([] (const httpd::request& req, websocket_output_stream* ws) {
+        std::cout << "Disconnected" << std::endl;
     });
 
     r.add(operation_type::GET, url("/"), h1);
@@ -86,7 +92,6 @@ void set_routes(routes& r) {
     r.add(operation_type::GET, url("/file").remainder("path"), new directory_handler("/"));
     r.put_ws("/managed", ws_managed_handler);
     r.put_ws("/", ws1);
-
 
     demo_json::hello_world.set(r, [] (const_req req) {
         demo_json::my_object obj;

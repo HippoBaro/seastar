@@ -34,6 +34,7 @@ public:
     //future<> write(net::packet p);
     //future<> write(scattered_message<char> msg);
     future<> write(websocket_opcode kind, temporary_buffer<char>);
+    future<> write(websocket_opcode kind, sstring buf);
     future<> close() { return _stream.close(); };
 private:
     friend class reactor;
@@ -76,9 +77,9 @@ private:
 
 public:
     socket_address remote_adress;
-    std::unique_ptr<request> _request;
+    request _request;
 
-    connected_websocket(connected_socket *socket, socket_address &remote_adress, std::unique_ptr<request> request) noexcept;
+    connected_websocket(connected_socket *socket, socket_address &remote_adress, request &request) noexcept;
 
     connected_websocket(connected_websocket &&cs) noexcept;
 

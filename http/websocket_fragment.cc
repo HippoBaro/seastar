@@ -24,6 +24,7 @@
 +---------------------------------------------------------------+
 */
 httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<char> raw) {
+    _is_empty = false;
     uint64_t i = sizeof(uint16_t);
     std::bitset<8> header(raw.begin()[0]);
     _fin = header.test(7);

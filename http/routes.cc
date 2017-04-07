@@ -112,7 +112,7 @@ future<> routes::handle_ws(const sstring &path, connected_websocket ws) {
     handler_websocket_base* handler = get_ws_handler(normalize_url(path), ws._request);
     if (handler != nullptr) {
         for (auto& i : handler->_mandatory_param) {
-            verify_param(*ws._request.get(), i);
+            verify_param(ws._request, i);
         }
         return handler->handle(path, std::move(ws));
     }
@@ -144,12 +144,12 @@ handler_base* routes::get_handler(operation_type type, const sstring& url,
     return nullptr;
 }
 
-handler_websocket_base *routes::get_ws_handler(const sstring &url, std::unique_ptr<request> &req) {
+handler_websocket_base *routes::get_ws_handler(const sstring &url, const httpd::request& req) {
     handler_websocket_base* handler = (_map_ws.find(url) == _map_ws.end()) ? nullptr : _map_ws[url];
     if (handler != nullptr) {
         try {
             for (auto& i : handler->_mandatory_param) {
-                verify_param(*req.get(), i);
+                verify_param(req, i);
             }
         }
         catch (const missing_param_exception &e) {
