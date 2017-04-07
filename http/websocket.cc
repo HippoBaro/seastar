@@ -5,10 +5,9 @@
 #include "websocket.hh"
 
 httpd::connected_websocket::connected_websocket(connected_socket *socket,
-                                         socket_address &remote_adress,
-                                                std::unique_ptr<request> request) noexcept : _socket(std::move(socket)),
+                                         socket_address &remote_adress, request &request) noexcept : _socket(std::move(socket)),
                                                                                              remote_adress(remote_adress),
-                                                                                             _request(std::move(request)) {}
+                                                                                             _request(request) {}
 
 httpd::connected_websocket::connected_websocket(httpd::connected_websocket &&cs) noexcept : _socket(std::move(cs._socket)),
                                                                                             remote_adress(cs.remote_adress),
@@ -23,7 +22,18 @@ httpd::connected_websocket &httpd::connected_websocket::operator=(httpd::connect
 
 future<httpd::inbound_websocket_fragment> httpd::websocket_input_stream::readFragment() {
     return _stream.read().then([] (temporary_buffer<char> buf) {
-        inbound_websocket_fragment fragment(std::move(buf));
+        if (!buf)
+        {
+            std::cout << "reading null packet" << std::endl;
+            return inbound_websocket_fragment();
+        }
+        for (auto b : buf){
+            std::bitset<8> set(b);
+            std::cout << set << " --> " << b << std::endl;
+        }
+        inbound_websocket_fragment fragment(std::move(buf)); //FIXME possible nullref
+
+        //std::cout << "is empty ?" << fragment.is_empty << std::endl;
         return std::move(fragment);
     });
 }
@@ -33,7 +43,12 @@ future<temporary_buffer<char>> httpd::websocket_input_stream::read() {
         _buf.reset();
     return repeat([this] { // gather all fragments and concatenate full message
         return readFragment().then([this] (inbound_websocket_fragment fragment) {
-            if (fragment.fin()) {
+            if (!fragment) {
+                std::cout << "reading empty frame" << std::endl;
+                _lastmassage = temporary_buffer<char>();
+                return stop_iteration::yes;
+            }
+            else if (fragment.fin()) {
                 if (_buf.empty()) {
                     _lastmassage = std::move(fragment.message);
                     return stop_iteration::yes;
@@ -57,6 +72,11 @@ future<> httpd::websocket_output_stream::write(websocket_opcode kind, temporary_
                 .then([this, &frag] { return this->_stream.write(std::move(frag.message)); })
                 .then([this] { return this->_stream.flush(); });
     });
+}
+
+future<> httpd::websocket_output_stream::write(websocket_opcode kind, sstring buf) {
+    temporary_buffer<char> tempbuf(buf.begin(), buf.size()); // FIXME strcpy
+    return write(kind, std::move(tempbuf));
 }
 
 /*future<> httpd::websocket_output_stream::flush() {

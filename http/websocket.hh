@@ -27,6 +27,7 @@ public:
 
     future<> write(std::unique_ptr<httpd::websocket_message> message);
     future<> write(websocket_opcode kind, temporary_buffer<char>);
+    future<> write(websocket_opcode kind, sstring buf);
     future<> close() { return _stream.close(); };
 private:
     friend class reactor;

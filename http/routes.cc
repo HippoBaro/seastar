@@ -112,7 +112,7 @@ future<> routes::handle_ws(const sstring &path, connected_websocket ws) {
     handler_websocket_base* handler = get_ws_handler(normalize_url(path), ws._request);
     if (handler != nullptr) {
         for (auto& i : handler->_mandatory_param) {
-            verify_param(*ws._request.get(), i);
+            verify_param(ws._request, i);
         }
         return handler->handle(path, std::move(ws));
     }
