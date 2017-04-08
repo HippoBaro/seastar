@@ -23,14 +23,7 @@ httpd::connected_websocket &httpd::connected_websocket::operator=(httpd::connect
 future<httpd::inbound_websocket_fragment> httpd::websocket_input_stream::readFragment() {
     return _stream.read().then([] (temporary_buffer<char> buf) {
         if (!buf)
-        {
-            std::cout << "reading null packet" << std::endl;
             return inbound_websocket_fragment();
-        }
-        for (auto b : buf){
-            std::bitset<8> set(b);
-            std::cout << set << " --> " << b << std::endl;
-        }
         inbound_websocket_fragment fragment(std::move(buf)); //FIXME possible nullref
 
         //std::cout << "is empty ?" << fragment.is_empty << std::endl;
@@ -44,7 +37,6 @@ future<temporary_buffer<char>> httpd::websocket_input_stream::read() {
     return repeat([this] { // gather all fragments and concatenate full message
         return readFragment().then([this] (inbound_websocket_fragment fragment) {
             if (!fragment) {
-                std::cout << "reading empty frame" << std::endl;
                 _lastmassage = temporary_buffer<char>();
                 return stop_iteration::yes;
             }

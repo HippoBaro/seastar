@@ -434,19 +434,12 @@ namespace httpd {
                     _replies.push(std::move(resp));
                     return do_until([this] {
                         return _replies.empty();
-                    }, [] {
-                        std::cout << "waiting for response to go.." << std::endl;
-                        return make_ready_future();
+                    }, [this] {
+                        return sleep(std::chrono::milliseconds(30));
                     }).then([this, req = std::move(req), url] {
                         auto ws = connected_websocket(&_fd, _addr, *req.get());
                         return _server._routes.handle_ws(url, std::move(ws));
                     });
-
-/*                    return do_with(std::move(req), [this, url, resp2 = std::move(resp)] (std::unique_ptr<request>& req) {
-                        return _replies.push_eventually(std::move(resp2)).then([this, &req, url] {
-
-                        });
-                    }).then([] {return make_ready_future();});*/
                 }
                 else {
                     //Refused
