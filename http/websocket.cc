@@ -20,41 +20,39 @@ httpd::connected_websocket &httpd::connected_websocket::operator=(httpd::connect
     return *this;
 }
 
-future<httpd::inbound_websocket_fragment> httpd::websocket_input_stream::readFragment() {
+future<httpd::inbound_websocket_fragment> httpd::websocket_input_stream::read_fragment() {
     return _stream.read().then([] (temporary_buffer<char> buf) {
         if (!buf)
             return inbound_websocket_fragment();
         inbound_websocket_fragment fragment(std::move(buf)); //FIXME possible nullref
-
-        //std::cout << "is empty ?" << fragment.is_empty << std::endl;
         return std::move(fragment);
     });
 }
 
-future<temporary_buffer<char>> httpd::websocket_input_stream::read() {
-    if (!_buf.empty())
-        _buf.reset();
+future<httpd::websocket_message> httpd::websocket_input_stream::read_message() {
     return repeat([this] { // gather all fragments and concatenate full message
-        return readFragment().then([this] (inbound_websocket_fragment fragment) {
+        return read_fragment().then([this] (inbound_websocket_fragment fragment) {
             if (!fragment) {
-                _lastmassage = temporary_buffer<char>();
+                _lastmassage = websocket_message();
                 return stop_iteration::yes;
             }
             else if (fragment.fin()) {
-                if (_buf.empty()) {
-                    _lastmassage = std::move(fragment.message);
-                    return stop_iteration::yes;
-                }
-                else {
-                    _buf.append(fragment.message.begin(), fragment.message.size());
-                    _lastmassage = std::move(temporary_buffer<char>(_buf.begin(), _buf.size(), fragment.message.release()));
-                }
+                if (_lastmassage.empty())
+                    _lastmassage = std::move(websocket_message(std::move(fragment)));
+                else
+                    _lastmassage.append(std::move(fragment));
+                return stop_iteration::yes;
             }
-            else
-                _buf.append(fragment.message.begin(), fragment.message.size());
+            _lastmassage.append(std::move(fragment));
             return stop_iteration::no;
         });
     }).then([this] { return std::move(_lastmassage); });
+}
+
+future<temporary_buffer<char>> httpd::websocket_input_stream::read() {
+    return read_message().then([this] (websocket_message message) {
+        return std::move(message.payload());
+    });
 }
 
 future<> httpd::websocket_output_stream::write(websocket_opcode kind, temporary_buffer<char> buf) {
@@ -70,7 +68,3 @@ future<> httpd::websocket_output_stream::write(websocket_opcode kind, sstring bu
     temporary_buffer<char> tempbuf(buf.begin(), buf.size()); // FIXME strcpy
     return write(kind, std::move(tempbuf));
 }
-
-/*future<> httpd::websocket_output_stream::flush() {
-    return this->_stream.flush();
-}*/
