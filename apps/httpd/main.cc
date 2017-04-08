@@ -70,15 +70,11 @@ void set_routes(routes& r) {
     auto ws_managed_handler = new websocket_handler();
 
     ws_managed_handler->on_connection([] (const httpd::request& req, websocket_output_stream* ws) {
-        std::cout << "New connection" << std::endl;
-        temporary_buffer<char> test("hello", 5);
+        temporary_buffer<char> test("Hello from seastar !", 20);
         return ws->write(websocket_opcode::TEXT, std::move(test));
     });
 
     ws_managed_handler->on_message_future([] (const httpd::request& req, websocket_output_stream* ws, websocket_message message) {
-/*        std::cout << "receiving : ";
-        std::cout.write(message.payload().get(), message.payload().size());
-        std::cout << std::endl;*/
         return ws->write(std::move(message));
     });
 
@@ -126,6 +122,5 @@ int main(int ac, char** av) {
                 return server->stop();
             });
         });
-
     });
 }

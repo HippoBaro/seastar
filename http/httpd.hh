@@ -369,10 +369,7 @@ namespace httpd {
                     } else if (it->second.find("Upgrade") != std::string::npos) {
                         auto upgrade = req->_headers.find("Upgrade");
                         if (upgrade != req->_headers.end() && upgrade->second == "websocket")
-                            return upgrade_websocket(std::move(req)).then([] {
-                                std::cout << "Cloising socket" << std::endl;
-                                return true;
-                            }); //websocket upgrade
+                            return upgrade_websocket(std::move(req)).then([] { return true; }); //websocket upgrade
                     }
                 }
                 bool should_close;
@@ -438,7 +435,9 @@ namespace httpd {
                     return do_until([this] {
                         return _replies.empty();
                     }, [this] {
-                        return sleep(std::chrono::milliseconds(30));
+                        //If we don't wait, the HTTP response might not be flushed before user-code start sending messages
+                        //resulting in malformed handcheck response.
+                        return sleep(std::chrono::milliseconds(30)); //FIXME this is awful
                     }).then([this, req = std::move(req), url] {
                         auto ws = connected_websocket(&_fd, _addr, *req.get());
                         return _server._routes.handle_ws(url, std::move(ws));
@@ -504,8 +503,6 @@ namespace httpd {
     public:
         http_server_control() : _server_dist(new distributed<http_server>) {
         }
-
-
         future<> start(const sstring& name = generate_server_name()) {
             return _server_dist->start(name);
         }

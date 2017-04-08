@@ -110,24 +110,20 @@ private:
         switch (message.opcode){
             case TEXT:
             case BINARY:
-                std::cout << "BINARY/TEXT" << std::endl;
                 return _on_message(req, ws, std::move(message)).then([] {
                     return false;
                 });
             case PING:
-                std::cout << "PING" << std::endl;
                 return _on_ping(req, ws, std::move(message)).then([] {
                     return false;
                 });
             case PONG:
-                std::cout << "PONG" << std::endl;
                 return _on_pong(req, ws, std::move(message)).then([] {
                     return false;
                 });
             case CLOSE:
             case RESERVED:
             default:
-                std::cout << "CLOSE" << std::endl;
                 return make_ready_future().then([] {
                     return true;
                 });
