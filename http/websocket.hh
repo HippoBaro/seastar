@@ -25,8 +25,8 @@ public:
 
     websocket_output_stream &operator=(websocket_output_stream &&) = default;
 
+    future<> write(websocket_message);
     future<> write(websocket_opcode kind, temporary_buffer<char>);
-    future<> write(websocket_opcode kind, sstring buf);
     future<> close() { return _stream.close(); };
 private:
     friend class reactor;
@@ -40,7 +40,7 @@ private:
     using tmp_buf = temporary_buffer<char>;
 
 private:
-    future<websocket_message> read_message();
+
 
 public:
     websocket_input_stream() = default;
@@ -53,9 +53,9 @@ public:
 
     bool eof() { return _eof; }
 
-    future<inbound_websocket_fragment> read_fragment();
+    future<websocket_message> read();
 
-    future<temporary_buffer<char>> read();
+    future<inbound_websocket_fragment> read_fragment();
 
     future<> close() { return _stream.close(); }
 };

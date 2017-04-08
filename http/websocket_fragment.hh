@@ -134,17 +134,23 @@ namespace httpd {
     class websocket_message {
     public:
         websocket_opcode opcode = RESERVED;
+        temporary_buffer<char> _message;
 
-        websocket_message() noexcept {}
+        websocket_message() noexcept : _is_empty(true) { }
         websocket_message(const websocket_message &) = delete;
-        websocket_message(websocket_message &&other) noexcept : _message(std::move(other._message)),
-                                                                _buf(std::move(other._buf)) {}
+        websocket_message(websocket_message &&other) noexcept : opcode(other.opcode),
+                                                                _message(std::move(other._message)),
+                                                                _buf(std::move(other._buf)),
+                                                                _is_empty(other._is_empty) {
+        }
 
         void operator=(const websocket_message&) = delete;
         websocket_message & operator= (websocket_message &&other) {
             if (this != &other) {
+                opcode = other.opcode;
                 _message = std::move(other._message);
                 _buf = std::move(other._buf);
+                _is_empty = other._is_empty;
             }
             return *this;
         }
@@ -154,25 +160,37 @@ namespace httpd {
             opcode = fragment.opcode();
         }
 
+        websocket_message(websocket_opcode kind, temporary_buffer<char> message) noexcept : _is_empty(false) {
+            _message = std::move(message);
+            opcode = kind;
+        }
+
+        websocket_message(websocket_opcode kind, sstring message) noexcept : _is_empty(false) {
+            _message = std::move(std::move(message).release());
+            opcode = kind;
+        }
+
         void append(websocket_fragment_base fragment) {
             if (_buf.empty())
                 _buf.append(_message.begin(), _message.size());
             _buf.append(fragment.message.begin(), fragment.message.size());
         }
 
-        temporary_buffer<char> &payload() {
-            if (_buf.empty())
-                return _message;
-            _message = std::move(_buf).release();
-            return _message;
+        void done() {
+            if (!_buf.empty())
+                _message = std::move(std::move(_buf).release());
         }
 
-        bool empty() { return !_is_empty; }
+        outbound_websocket_fragment to_fragment() {
+            outbound_websocket_fragment fragment(opcode, std::move(_message));
+            return std::move(fragment);
+        }
+
+        bool empty() { return _is_empty || opcode == CLOSE; }
 
     private:
-        temporary_buffer<char> _message;
         sstring _buf; //if the message is made of multiple fragments, we have to buff it.
-        bool _is_empty = true;
+        bool _is_empty;
     };
 }
 

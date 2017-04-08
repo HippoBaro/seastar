@@ -369,7 +369,10 @@ namespace httpd {
                     } else if (it->second.find("Upgrade") != std::string::npos) {
                         auto upgrade = req->_headers.find("Upgrade");
                         if (upgrade != req->_headers.end() && upgrade->second == "websocket")
-                            return upgrade_websocket(std::move(req)).then([] { return true; }); //websocket upgrade
+                            return upgrade_websocket(std::move(req)).then([] {
+                                std::cout << "Cloising socket" << std::endl;
+                                return true;
+                            }); //websocket upgrade
                     }
                 }
                 bool should_close;

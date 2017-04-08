@@ -56,10 +56,10 @@ void set_routes(routes& r) {
         return do_with(std::move(input), std::move(output), [] (websocket_input_stream &input,
                                                                 websocket_output_stream &output) {
             return repeat([&input, &output] {
-                return input.read().then([&output](temporary_buffer<char> buf){
-                    if (!buf)
+                return input.read().then([&output](websocket_message buf){
+                    if (buf.empty())
                         return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
-                    return output.write(websocket_opcode::TEXT, std::move(buf)).then([] {
+                    return output.write(std::move(buf)).then([] {
                         return stop_iteration::no;
                     });
                 });
@@ -72,15 +72,14 @@ void set_routes(routes& r) {
     ws_managed_handler->on_connection([] (const httpd::request& req, websocket_output_stream* ws) {
         std::cout << "New connection" << std::endl;
         temporary_buffer<char> test("hello", 5);
-        return ws->write(TEXT, std::move(test)).then_wrapped([] (future<> f) {
-            if (f.failed())
-                std::cout << "Error ! " << std::endl;
-            //return make_ready_future();
-        });
+        return ws->write(websocket_opcode::TEXT, std::move(test));
     });
 
-    ws_managed_handler->on_message_future([] (const httpd::request& req, websocket_output_stream* ws, temporary_buffer<char> message) {
-        return ws->write(websocket_opcode::TEXT, std::move(message));
+    ws_managed_handler->on_message_future([] (const httpd::request& req, websocket_output_stream* ws, websocket_message message) {
+/*        std::cout << "receiving : ";
+        std::cout.write(message.payload().get(), message.payload().size());
+        std::cout << std::endl;*/
+        return ws->write(std::move(message));
     });
 
     ws_managed_handler->on_disconnection([] (const httpd::request& req, websocket_output_stream* ws) {

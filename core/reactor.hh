@@ -68,6 +68,7 @@
 #include "core/enum.hh"
 #include "core/memory.hh"
 #include <boost/range/irange.hpp>
+#include <http/websocket_fragment.hh>
 #include "timer.hh"
 #include "condition-variable.hh"
 #include "util/log.hh"
