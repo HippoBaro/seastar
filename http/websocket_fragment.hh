@@ -76,6 +76,9 @@ namespace httpd {
     class inbound_websocket_fragment : public websocket_fragment_base {
 
     public:
+
+        inbound_websocket_fragment(const inbound_websocket_fragment &) = delete;
+
         inbound_websocket_fragment(inbound_websocket_fragment &&other) noexcept : websocket_fragment_base(std::move(other)) {
         }
 
@@ -88,6 +91,7 @@ namespace httpd {
 
     public:
 
+        outbound_websocket_fragment(const outbound_websocket_fragment &) = delete;
         outbound_websocket_fragment(outbound_websocket_fragment &&other) noexcept : websocket_fragment_base(std::move(other)) {
         }
         outbound_websocket_fragment(websocket_opcode opcode, temporary_buffer<char> response) {
@@ -127,6 +131,49 @@ namespace httpd {
         }
     };
 
+    class websocket_message {
+    public:
+        websocket_opcode opcode = RESERVED;
+
+        websocket_message() noexcept {}
+        websocket_message(const websocket_message &) = delete;
+        websocket_message(websocket_message &&other) noexcept : _message(std::move(other._message)),
+                                                                _buf(std::move(other._buf)) {}
+
+        void operator=(const websocket_message&) = delete;
+        websocket_message & operator= (websocket_message &&other) {
+            if (this != &other) {
+                _message = std::move(other._message);
+                _buf = std::move(other._buf);
+            }
+            return *this;
+        }
+
+        websocket_message(websocket_fragment_base fragment) noexcept : _is_empty(false) {
+            _message = std::move(fragment.message);
+            opcode = fragment.opcode();
+        }
+
+        void append(websocket_fragment_base fragment) {
+            if (_buf.empty())
+                _buf.append(_message.begin(), _message.size());
+            _buf.append(fragment.message.begin(), fragment.message.size());
+        }
+
+        temporary_buffer<char> &payload() {
+            if (_buf.empty())
+                return _message;
+            _message = std::move(_buf).release();
+            return _message;
+        }
+
+        bool empty() { return !_is_empty; }
+
+    private:
+        temporary_buffer<char> _message;
+        sstring _buf; //if the message is made of multiple fragments, we have to buff it.
+        bool _is_empty = true;
+    };
 }
 
 #endif //SEASTAR_WEBSOCKET_FRAGMENT_HH

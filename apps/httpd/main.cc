@@ -54,7 +54,7 @@ void set_routes(routes& r) {
         auto input = ws.input();
         auto output = ws.output();
         return do_with(std::move(input), std::move(output), [] (websocket_input_stream &input,
-                                                                websocket_output_stream &output){
+                                                                websocket_output_stream &output) {
             return repeat([&input, &output] {
                 return input.read().then([&output](temporary_buffer<char> buf){
                     if (!buf)

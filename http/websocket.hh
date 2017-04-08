@@ -25,14 +25,6 @@ public:
 
     websocket_output_stream &operator=(websocket_output_stream &&) = default;
 
-    //future<> write(const char* buf, size_t n);
-    //future<> write(const char* buf);
-
-    //future<> write(const basic_sstring<StringChar, SizeType, MaxSize>& s);
-    //future<> write(const std::basic_string<char>& s);
-
-    //future<> write(net::packet p);
-    //future<> write(scattered_message<char> msg);
     future<> write(websocket_opcode kind, temporary_buffer<char>);
     future<> write(websocket_opcode kind, sstring buf);
     future<> close() { return _stream.close(); };
@@ -42,21 +34,18 @@ private:
 
 class websocket_input_stream final {
     input_stream<char> _stream;
-    sstring _buf;
-    temporary_buffer<char> _lastmassage;
+    websocket_message _lastmassage;
     bool _eof = false;
 private:
     using tmp_buf = temporary_buffer<char>;
 
-    size_t available() const { return _buf.size(); }
-
-protected:
-    void reset() { _buf = {}; }
+private:
+    future<websocket_message> read_message();
 
 public:
     websocket_input_stream() = default;
 
-    explicit websocket_input_stream(input_stream<char> stream) : _stream(std::move(stream)), _buf("") {}
+    explicit websocket_input_stream(input_stream<char> stream) : _stream(std::move(stream)) {}
 
     websocket_input_stream(websocket_input_stream &&) = default;
 
@@ -64,7 +53,7 @@ public:
 
     bool eof() { return _eof; }
 
-    future<inbound_websocket_fragment> readFragment();
+    future<inbound_websocket_fragment> read_fragment();
 
     future<temporary_buffer<char>> read();
 
