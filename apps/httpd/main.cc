@@ -71,12 +71,12 @@ void set_routes(routes& r) {
 
     ws_managed_handler->on_connection([] (const httpd::request& req, websocket_output_stream* ws) {
         std::cout << "New connection" << std::endl;
-/*        temporary_buffer<char> test("hello", 5);
+        temporary_buffer<char> test("hello", 5);
         return ws->write(TEXT, std::move(test)).then_wrapped([] (future<> f) {
             if (f.failed())
                 std::cout << "Error ! " << std::endl;
             //return make_ready_future();
-        });*/
+        });
     });
 
     ws_managed_handler->on_message_future([] (const httpd::request& req, websocket_output_stream* ws, temporary_buffer<char> message) {
