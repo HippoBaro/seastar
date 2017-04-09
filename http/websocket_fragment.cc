@@ -54,18 +54,18 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
     //std::cout << "payload length is " << raw.size() << " and fragment announced length is " << _lenght << ". FIN is " << _fin << std::endl;
 
     if (_masked && raw.size() >= *i + _lenght + sizeof(uint32_t)) {
-        _maskkey = temporary_buffer<char>(std::move(raw.share(*i, sizeof(uint32_t))));
+        _maskkey = std::move(raw.share(*i, sizeof(uint32_t)));
         *i += sizeof(uint32_t);
 
         //std::cout << "index is " << *i << std::endl;
-        message = temporary_buffer<char>(std::move(raw.share(*i, _lenght)));
+        message = std::move(raw.share(*i, _lenght));
         auto buf = message.get_write();
         for (uint64_t j = 0; j < _lenght; ++j)
-            buf[j] = message[j] ^ _maskkey[j%4];
+            buf[j] = buf[j] ^ _maskkey[j%4];
         _is_empty = false;
         *i += _lenght;
     } else if (raw.size() >= *i + _lenght) {
-        message = temporary_buffer<char>(std::move(raw.share(*i, _lenght)));
+        message = std::move(raw.share(*i, _lenght));
         _is_empty = false;
         *i += _lenght;
     }

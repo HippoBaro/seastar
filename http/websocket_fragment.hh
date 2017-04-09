@@ -135,13 +135,13 @@ namespace httpd {
     class websocket_message {
     public:
         websocket_opcode opcode = RESERVED;
-        temporary_buffer<char> _message;
+        temporary_buffer<char> _header;
         std::vector<temporary_buffer<char>> _fragments;
 
         websocket_message() noexcept : _is_empty(true) { }
         websocket_message(const websocket_message &) = delete;
         websocket_message(websocket_message &&other) noexcept : opcode(other.opcode),
-                                                                _message(std::move(other._message)),
+                                                                _header(std::move(other._header)),
                                                                 _fragments(std::move(other._fragments)),
                                                                 _is_empty(other._is_empty) {
         }
@@ -150,7 +150,7 @@ namespace httpd {
         websocket_message & operator= (websocket_message &&other) {
             if (this != &other) {
                 opcode = other.opcode;
-                _message = std::move(other._message);
+                _header = std::move(other._header),
                 _fragments = std::move(other._fragments);
                 _is_empty = other._is_empty;
             }
@@ -158,46 +158,64 @@ namespace httpd {
         }
 
         websocket_message(websocket_fragment_base fragment) noexcept : _is_empty(false) {
-            _message = std::move(fragment.message);
+            _fragments.push_back(std::move(fragment.message));
             opcode = fragment.opcode();
         }
 
         websocket_message(websocket_opcode kind, temporary_buffer<char> message) noexcept : _is_empty(false) {
-            _message = std::move(message);
+            _fragments.push_back(std::move(message));
             opcode = kind;
         }
 
         websocket_message(websocket_opcode kind, sstring message) noexcept : _is_empty(false) {
-            _message = std::move(std::move(message).release());
+            _fragments.push_back(std::move(message).release());
             opcode = kind;
         }
 
         void append(websocket_fragment_base fragment) {
             _fragments.push_back(std::move(fragment.message));
-            //_buf.append(fragment.message.begin(), fragment.message.size());
         }
 
         void done() {
-            //if (!_buf.empty())
-            //    _message = std::move(std::move(_buf).release());
-        }
+            auto header = 0x81;
 
-        outbound_websocket_fragment to_fragment() {
-            //TODO : handle multiple fragments
-            outbound_websocket_fragment fragment(opcode, std::move(concat()));
-            return std::move(fragment);
+            uint64_t len = 0;
+            for (auto &fragment : _fragments)
+                len += fragment.size();
+
+            if (len < 125) { //Size fits 7bits
+                temporary_buffer<char> buff(2);
+                buff.get_write()[0] = header;
+                buff.get_write()[1] = static_cast<unsigned char>(len);
+
+                _header = std::move(buff);
+            } //Size in extended to 16bits
+            else if (len < std::numeric_limits<uint16_t>::max()) {
+                temporary_buffer<char> buff(4);
+                buff.get_write()[0] = header;
+                buff.get_write()[1] = static_cast<unsigned char>(126);
+                std::memcpy(buff.share(2, 2).get_write(), &len, 2);
+
+                _header = std::move(buff);
+            }
+            else { //Size extended to 64bits
+                temporary_buffer<char> buff(10);
+                buff.get_write()[0] = header;
+                std::bitset<8> byte2(126);
+                buff.get_write()[1] = static_cast<unsigned char>(127);
+                std::memcpy(buff.share(2, 8).get_write(), &len, 8);
+
+                _header = std::move(buff);
+            }
         }
 
         temporary_buffer<char> concat() {
-            if (_fragments.empty())
-                return std::move(_message);
             std::cout << "copying" << std::endl;
-            uint64_t length = _message.size();
+            uint64_t length = 0;
             for (auto& n : _fragments)
                 length += n.size();
             temporary_buffer<char> ret(length);
-            std::memcpy(ret.get_write(), _message.get(), _message.size());
-            length = _message.size();
+            length = 0;
             for (auto& n : _fragments) {
                 std::memcpy(ret.share(length, n.size()).get_write(), n.get(), n.size());
                 length = n.size();

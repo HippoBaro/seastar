@@ -7,7 +7,9 @@
 httpd::connected_websocket::connected_websocket(connected_socket *socket, socket_address &remote_adress,
                                                 request &request) noexcept : _socket(std::move(socket)),
                                                                              remote_adress(remote_adress),
-                                                                             _request(request) {}
+                                                                             _request(request) {
+    //std::cout << "new websocket on core #" << engine().cpu_id() << std::endl;
+}
 
 httpd::connected_websocket::connected_websocket(httpd::connected_websocket &&cs) noexcept : _socket(std::move(cs._socket)),
                                                                                             remote_adress(cs.remote_adress),
@@ -64,19 +66,19 @@ future<httpd::websocket_message> httpd::websocket_input_stream::read() {
             return stop_iteration::no;
         });
     }).then([this] {
-        //std::cout << "returning message " << _lastmassage.opcode << std::endl;
-        _lastmassage.done();
         return std::move(_lastmassage);
     });
 }
 
 future<> httpd::websocket_output_stream::write(websocket_message message) {
-    outbound_websocket_fragment frag(std::move(message.to_fragment()));
-    return do_with(std::move(frag), [this] (outbound_websocket_fragment &frag) {
-        return this->_stream.write(std::move(frag.get_header())).then([this, &frag] {
-            return this->_stream.write(std::move(frag.message));
-        }).then([this] {
-            return this->_stream.flush();
+    message.done();
+    return do_with(std::move(message), [this] (websocket_message &frag) {
+        return this->_stream.write(std::move(frag._header)).then([this, &frag] {
+            return do_for_each(frag._fragments, [this] (temporary_buffer<char> &buff) {
+                return this->_stream.write(std::move(buff));
+            }).then([this] {
+                return this->_stream.flush();
+            });
         });
     });
 }
