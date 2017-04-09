@@ -93,7 +93,6 @@ public:
             handler_base* handler) {
         //FIXME if a handler is already exists, it need to be
         // deleted to prevent memory leak
-        //Why not use unique_ptr ?
         _map[type][url] = handler;
         return *this;
     }
@@ -104,10 +103,9 @@ public:
      * @param handler the desire handler
      * @return it self
      */
-    routes& put_ws(const sstring& url, handler_websocket_base* handler) {
+    routes& put(const sstring& url, handler_websocket_base* handler) {
         //FIXME if a handler is already exists, it need to be
         // deleted to prevent memory leak
-        //Why not use unique_ptr ?
         _map_ws[url] = handler;
         return *this;
     }

@@ -79,14 +79,14 @@ void set_routes(routes& r) {
     });
 
     ws_managed_handler->on_disconnection([] (const httpd::request& req, websocket_output_stream* ws) {
-        std::cout << "Disconnected" << std::endl;
+
     });
 
     r.add(operation_type::GET, url("/"), h1);
     r.add(operation_type::GET, url("/jf"), h2);
     r.add(operation_type::GET, url("/file").remainder("path"), new directory_handler("/"));
-    r.put_ws("/managed", ws_managed_handler);
-    r.put_ws("/", ws1);
+    r.put("/managed", ws_managed_handler);
+    r.put("/", ws1);
 
     demo_json::hello_world.set(r, [] (const_req req) {
         demo_json::my_object obj;

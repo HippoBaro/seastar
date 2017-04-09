@@ -36,12 +36,13 @@ class websocket_input_stream final {
     input_stream<char> _stream;
     websocket_message _lastmassage;
     bool _eof = false;
+    temporary_buffer<char> _buf;
+    uint32_t _index = 0;
 private:
     using tmp_buf = temporary_buffer<char>;
 
 private:
-
-
+    future<httpd::inbound_websocket_fragment> parse_fragment();
 public:
     websocket_input_stream() = default;
 
@@ -55,7 +56,7 @@ public:
 
     future<websocket_message> read();
 
-    future<inbound_websocket_fragment> read_fragment();
+    future<httpd::inbound_websocket_fragment> read_fragment();
 
     future<> close() { return _stream.close(); }
 };

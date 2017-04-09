@@ -34,9 +34,9 @@ namespace httpd {
     public:
         bool _is_empty = false;
         temporary_buffer<char> message;
+        bool _is_valid = false;
 
-
-        websocket_fragment_base() : _is_empty(true) {}
+        websocket_fragment_base() : _is_empty(true), _is_valid(false) {}
 
         websocket_fragment_base(websocket_fragment_base &&fragment) noexcept : _fin(fragment.fin()),
                                                                                _opcode(fragment.opcode()),
@@ -47,7 +47,8 @@ namespace httpd {
                                                                                _masked(fragment.masked()),
                                                                                _maskkey(std::move(fragment._maskkey)),
                                                                                _is_empty(fragment._is_empty),
-                                                                               message(std::move(fragment.message)) {
+                                                                               message(std::move(fragment.message)),
+                                                                               _is_valid(fragment._is_valid) {
         }
 
     public:
@@ -66,11 +67,11 @@ namespace httpd {
         bool masked() { return _masked; }
 
         bool valid() {
-            return !((rsv1() /*&& !setCompressed(user)*/) || rsv2() || rsv3() || (opcode() > 2 && opcode() < 8) ||
-                     opcode() > 10 || (opcode() > 2 && (!fin() || length() > 125)));
+            return !((rsv1() || rsv2() || rsv3() || (opcode() > 2 && opcode() < 8) ||
+                     opcode() > 10 || (opcode() > 2 && (!fin() || length() > 125))));
         }
 
-        operator bool() const { return !_is_empty; }
+        operator bool() { return !_is_empty && valid(); }
     };
 
     class inbound_websocket_fragment : public websocket_fragment_base {
@@ -82,7 +83,7 @@ namespace httpd {
         inbound_websocket_fragment(inbound_websocket_fragment &&other) noexcept : websocket_fragment_base(std::move(other)) {
         }
 
-        inbound_websocket_fragment(temporary_buffer<char> raw);
+        inbound_websocket_fragment(temporary_buffer<char> &raw, uint32_t *index);
 
         inbound_websocket_fragment() : websocket_fragment_base() {}
     };
@@ -135,12 +136,13 @@ namespace httpd {
     public:
         websocket_opcode opcode = RESERVED;
         temporary_buffer<char> _message;
+        std::vector<temporary_buffer<char>> _fragments;
 
         websocket_message() noexcept : _is_empty(true) { }
         websocket_message(const websocket_message &) = delete;
         websocket_message(websocket_message &&other) noexcept : opcode(other.opcode),
                                                                 _message(std::move(other._message)),
-                                                                _buf(std::move(other._buf)),
+                                                                _fragments(std::move(other._fragments)),
                                                                 _is_empty(other._is_empty) {
         }
 
@@ -149,7 +151,7 @@ namespace httpd {
             if (this != &other) {
                 opcode = other.opcode;
                 _message = std::move(other._message);
-                _buf = std::move(other._buf);
+                _fragments = std::move(other._fragments);
                 _is_empty = other._is_empty;
             }
             return *this;
@@ -171,25 +173,41 @@ namespace httpd {
         }
 
         void append(websocket_fragment_base fragment) {
-            if (_buf.empty())
-                _buf.append(_message.begin(), _message.size());
-            _buf.append(fragment.message.begin(), fragment.message.size());
+            _fragments.push_back(std::move(fragment.message));
+            //_buf.append(fragment.message.begin(), fragment.message.size());
         }
 
         void done() {
-            if (!_buf.empty())
-                _message = std::move(std::move(_buf).release());
+            //if (!_buf.empty())
+            //    _message = std::move(std::move(_buf).release());
         }
 
         outbound_websocket_fragment to_fragment() {
-            outbound_websocket_fragment fragment(opcode, std::move(_message));
+            //TODO : handle multiple fragments
+            outbound_websocket_fragment fragment(opcode, std::move(concat()));
             return std::move(fragment);
+        }
+
+        temporary_buffer<char> concat() {
+            if (_fragments.empty())
+                return std::move(_message);
+            std::cout << "copying" << std::endl;
+            uint64_t length = _message.size();
+            for (auto& n : _fragments)
+                length += n.size();
+            temporary_buffer<char> ret(length);
+            std::memcpy(ret.get_write(), _message.get(), _message.size());
+            length = _message.size();
+            for (auto& n : _fragments) {
+                std::memcpy(ret.share(length, n.size()).get_write(), n.get(), n.size());
+                length = n.size();
+            }
+            return std::move(ret);
         }
 
         bool empty() { return _is_empty || opcode == CLOSE; }
 
     private:
-        sstring _buf; //if the message is made of multiple fragments, we have to buff it.
         bool _is_empty;
     };
 }
