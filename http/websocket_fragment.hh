@@ -88,50 +88,6 @@ namespace httpd {
         inbound_websocket_fragment() : websocket_fragment_base() {}
     };
 
-    class outbound_websocket_fragment : public websocket_fragment_base {
-
-    public:
-
-        outbound_websocket_fragment(const outbound_websocket_fragment &) = delete;
-        outbound_websocket_fragment(outbound_websocket_fragment &&other) noexcept : websocket_fragment_base(std::move(other)) {
-        }
-        outbound_websocket_fragment(websocket_opcode opcode, temporary_buffer<char> response) {
-            _opcode = opcode;
-            message = std::move(response);
-            _lenght = message.size();
-            _fin = true;
-            _masked = false;
-            _rsv1 = false;
-            _rsv2 = false;
-            _rsv3 = false;
-        }
-
-        temporary_buffer<char> get_header();
-
-        void set_fin(bool fin) { _fin = fin; }
-
-        void set_opcode(websocket_opcode opcode) { _opcode = opcode; };
-
-        void set_rsv2(bool rsv2) { _rsv2 = rsv2; } ;
-
-        void set_rsv3(bool rsv3) { _rsv3 = rsv3; };
-
-        void set_rsv1(bool rsv1) { _rsv1 = rsv1; };
-
-    private:
-        char get_header_internal() {
-            std::bitset<8> firstpart;
-            firstpart.set();
-            firstpart[7] = fin();
-            firstpart[6] = rsv1();
-            firstpart[5] = rsv2();
-            firstpart[4] = rsv3();
-            std::bitset<8> secondpart(opcode());
-            secondpart.set(7).set(6).set(5).set(4);
-            return static_cast<unsigned char>((firstpart & secondpart).to_ulong());
-        }
-    };
-
     class websocket_message {
     public:
         websocket_opcode opcode = RESERVED;
@@ -157,9 +113,9 @@ namespace httpd {
             return *this;
         }
 
-        websocket_message(websocket_fragment_base fragment) noexcept : _is_empty(false) {
-            _fragments.push_back(std::move(fragment.message));
-            opcode = fragment.opcode();
+        websocket_message(std::unique_ptr<websocket_fragment_base> fragment) noexcept : _is_empty(false) {
+            _fragments.push_back(std::move(fragment->message));
+            opcode = fragment->opcode();
         }
 
         websocket_message(websocket_opcode kind, temporary_buffer<char> message) noexcept : _is_empty(false) {
@@ -172,8 +128,8 @@ namespace httpd {
             opcode = kind;
         }
 
-        void append(websocket_fragment_base fragment) {
-            _fragments.push_back(std::move(fragment.message));
+        void append(std::unique_ptr<websocket_fragment_base> fragment) {
+            _fragments.push_back(std::move(fragment->message));
         }
 
         void done() {

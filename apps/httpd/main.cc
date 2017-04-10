@@ -26,6 +26,7 @@
 #include "http/file_handler.hh"
 #include "apps/httpd/demo.json.hh"
 #include "http/api_docs.hh"
+#include "core/prometheus.hh"
 
 namespace bpo = boost::program_options;
 
@@ -56,8 +57,8 @@ void set_routes(routes& r) {
         return do_with(std::move(input), std::move(output), [] (websocket_input_stream &input,
                                                                 websocket_output_stream &output) {
             return repeat([&input, &output] {
-                return input.read().then([&output](websocket_message buf){
-                    if (buf.empty())
+                return input.read().then([&output](std::unique_ptr<httpd::websocket_message> buf){
+                    if (!buf)
                         return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
                     return output.write(std::move(buf)).then([] {
                         return stop_iteration::no;
@@ -74,7 +75,7 @@ void set_routes(routes& r) {
         return ws->write(websocket_opcode::TEXT, std::move(test));
     });
 
-    ws_managed_handler->on_message_future([] (const httpd::request& req, websocket_output_stream* ws, websocket_message message) {
+    ws_managed_handler->on_message_future([] (const httpd::request& req, websocket_output_stream* ws, std::unique_ptr<httpd::websocket_message> message) {
         return ws->write(std::move(message));
     });
 
@@ -117,6 +118,8 @@ int main(int ac, char** av) {
         }).then([server, port] {
             return server->listen(port);
         }).then([server, port] {
+            //sprometheus::config config;
+            //prometheus::start(*server, config);
             std::cout << "Seastar HTTP server listening on port " << port << " ...\n";
             engine().at_exit([server] {
                 return server->stop();

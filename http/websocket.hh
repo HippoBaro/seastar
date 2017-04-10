@@ -25,7 +25,7 @@ public:
 
     websocket_output_stream &operator=(websocket_output_stream &&) = default;
 
-    future<> write(websocket_message);
+    future<> write(std::unique_ptr<httpd::websocket_message> message);
     future<> write(websocket_opcode kind, temporary_buffer<char>);
     future<> close() { return _stream.close(); };
 private:
@@ -34,15 +34,13 @@ private:
 
 class websocket_input_stream final {
     input_stream<char> _stream;
-    websocket_message _lastmassage;
-    bool _eof = false;
+    std::unique_ptr<inbound_websocket_fragment> _fragment;
+    std::unique_ptr<websocket_message> _lastmassage;
     temporary_buffer<char> _buf;
     uint32_t _index = 0;
-private:
-    using tmp_buf = temporary_buffer<char>;
 
 private:
-    future<httpd::inbound_websocket_fragment> parse_fragment();
+    future<> parse_fragment();
 public:
     websocket_input_stream() = default;
 
@@ -52,11 +50,9 @@ public:
 
     websocket_input_stream &operator=(websocket_input_stream &&) = default;
 
-    bool eof() { return _eof; }
+    future<std::unique_ptr<httpd::websocket_message>> read();
 
-    future<websocket_message> read();
-
-    future<httpd::inbound_websocket_fragment> read_fragment();
+    future<> read_fragment();
 
     future<> close() { return _stream.close(); }
 };

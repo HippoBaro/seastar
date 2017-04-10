@@ -70,36 +70,3 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
         *i += _lenght;
     }
 }
-
-temporary_buffer<char> httpd::outbound_websocket_fragment::get_header() {
-    auto header = get_header_internal();
-    if (_lenght < 125) { //Size fits 7bits
-        temporary_buffer<char> buff(2);
-        buff.get_write()[0] = header;
-/*        std::bitset<8> byte2(static_cast<unsigned char>(_lenght));
-        byte2[7] = _masked;*/
-        buff.get_write()[1] = static_cast<unsigned char>(_lenght);
-
-        return std::move(buff);
-    } //Size in extended to 16bits
-    else if (_lenght < std::numeric_limits<uint16_t>::max()) {
-        temporary_buffer<char> buff(4);
-        buff.get_write()[0] = header;
-        std::bitset<8> byte2(126);
-        byte2[7] = _masked;
-        buff.get_write()[1] = static_cast<unsigned char>(byte2.to_ulong());
-        std::memcpy(buff.share(2, 2).get_write(), &_lenght, 2);
-
-        return std::move(buff);
-    }
-    else { //Size extended to 64bits
-        temporary_buffer<char> buff(10);
-        buff.get_write()[0] = header;
-        std::bitset<8> byte2(126);
-        byte2[7] = _masked;
-        buff.get_write()[1] = static_cast<unsigned char>(byte2.to_ulong());
-        std::memcpy(buff.share(2, 8).get_write(), &_lenght, 8);
-
-        return std::move(buff);
-    }
-}
