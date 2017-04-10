@@ -502,6 +502,7 @@ namespace httpd {
         static sstring generate_server_name();
     public:
         http_server_control() : _server_dist(new distributed<http_server>) {
+
         }
         future<> start(const sstring& name = generate_server_name()) {
             return _server_dist->start(name);

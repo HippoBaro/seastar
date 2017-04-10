@@ -118,6 +118,8 @@ int main(int ac, char** av) {
         }).then([server, port] {
             return server->listen(port);
         }).then([server, port] {
+            //sprometheus::config config;
+            //prometheus::start(*server, config);
             std::cout << "Seastar HTTP server listening on port " << port << " ...\n";
             engine().at_exit([server] {
                 return server->stop();
