@@ -24,44 +24,40 @@
 +---------------------------------------------------------------+
 */
 httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<char> &raw, uint32_t *i) : websocket_fragment_base() {
-    //std::cout << "index is " << *i << std::endl;
+    auto buf = raw.get_write();
 
-    std::bitset<8> header(raw.begin()[*i]);
-    _fin = header.test(7);
-    _rsv1 = header.test(6);
-    _rsv2 = header.test(5);
-    _rsv3 = header.test(4);
-    _opcode = static_cast<websocket_opcode>(header.reset(7).reset(6).reset(5).reset(4).to_ulong());
+    //First header byte
+    _fin = buf[*i] & 128;
+    _rsv1 = buf[*i] & 64;
+    //_rsv2 = header.test(5);
+    //_rsv3 = header.test(4);
+    _opcode = static_cast<websocket_opcode>(buf[*i] & 15);
     *i += sizeof(uint8_t);
 
-    header = std::bitset<8>(raw.begin()[*i]);
-    _masked = header.test(7);
-    header = header.reset(7);
+    //Second header byte
+    _masked = buf[*i] & 128;
+    _lenght = buf[*i] & 127;
     *i += sizeof(uint8_t);
 
-    if (header.to_ulong() < 126) {
-        _lenght = header.to_ulong();
-    }
-    else if (header.to_ulong() == 126 && raw.size() >= *i + sizeof(uint16_t)) {
+    if (_lenght == 126 && raw.size() >= *i + sizeof(uint16_t)) {
         _lenght = *((uint16_t *) raw.share(*i, sizeof(uint16_t)).get());
         *i += sizeof(uint16_t);
     }
-    else if (header.to_ulong() == 127 && raw.size() >= *i + sizeof(uint64_t)) {
+    else if (_lenght == 127 && raw.size() >= *i + sizeof(uint64_t)) {
         _lenght = *((uint64_t *) raw.share(*i, sizeof(uint64_t)).get());
         *i += sizeof(uint64_t);
     }
 
-    //std::cout << "payload length is " << raw.size() << " and fragment announced length is " << _lenght << ". FIN is " << _fin << std::endl;
-
     if (_masked && raw.size() >= *i + _lenght + sizeof(uint32_t)) {
-        _maskkey = std::move(raw.share(*i, sizeof(uint32_t)));
+        //_maskkey = std::move(raw.share(*i, sizeof(uint32_t)));
+        uint64_t k = *i;
         *i += sizeof(uint32_t);
 
         //std::cout << "index is " << *i << std::endl;
         message = std::move(raw.share(*i, _lenght));
-        auto buf = message.get_write();
+
         for (uint64_t j = 0; j < _lenght; ++j)
-            buf[j] = buf[j] ^ _maskkey[j%4];
+            buf[j] = buf[j] ^ buf[(k - j) % 4];
         _is_empty = false;
         *i += _lenght;
     } else if (raw.size() >= *i + _lenght) {

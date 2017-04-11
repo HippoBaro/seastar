@@ -64,7 +64,8 @@ future<std::unique_ptr<httpd::websocket_message>> httpd::websocket_input_stream:
 future<> httpd::websocket_output_stream::write(std::unique_ptr<httpd::websocket_message> message) {
     message->done();
     return do_with(std::move(message), [this] (std::unique_ptr<httpd::websocket_message> &frag) {
-        return this->_stream.write(std::move(frag->_header)).then([this, &frag] {
+        temporary_buffer<char> head((char *)&frag->_header, frag->_header_size);
+        return this->_stream.write(std::move(head)).then([this, &frag] {
             return do_for_each(frag->_fragments, [this] (temporary_buffer<char> &buff) {
                 return this->_stream.write(std::move(buff));
             }).then([this] {

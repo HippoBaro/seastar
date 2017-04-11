@@ -91,13 +91,13 @@ namespace httpd {
     class websocket_message {
     public:
         websocket_opcode opcode = RESERVED;
-        temporary_buffer<char> _header;
+        char _header[10];
+        size_t _header_size = 0;
         std::vector<temporary_buffer<char>> _fragments;
 
         websocket_message() noexcept : _is_empty(true) { }
         websocket_message(const websocket_message &) = delete;
         websocket_message(websocket_message &&other) noexcept : opcode(other.opcode),
-                                                                _header(std::move(other._header)),
                                                                 _fragments(std::move(other._fragments)),
                                                                 _is_empty(other._is_empty) {
         }
@@ -106,7 +106,6 @@ namespace httpd {
         websocket_message & operator= (websocket_message &&other) {
             if (this != &other) {
                 opcode = other.opcode;
-                _header = std::move(other._header),
                 _fragments = std::move(other._fragments);
                 _is_empty = other._is_empty;
             }
@@ -140,28 +139,21 @@ namespace httpd {
                 len += fragment.size();
 
             if (len < 125) { //Size fits 7bits
-                temporary_buffer<char> buff(2);
-                buff.get_write()[0] = header;
-                buff.get_write()[1] = static_cast<unsigned char>(len);
-
-                _header = std::move(buff);
+                _header[0] = header;
+                _header[1] = static_cast<unsigned char>(len);
+                _header_size = 2;
             } //Size in extended to 16bits
             else if (len < std::numeric_limits<uint16_t>::max()) {
-                temporary_buffer<char> buff(4);
-                buff.get_write()[0] = header;
-                buff.get_write()[1] = static_cast<unsigned char>(126);
-                std::memcpy(buff.share(2, 2).get_write(), &len, 2);
-
-                _header = std::move(buff);
+                _header[0] = header;
+                _header[1] = static_cast<unsigned char>(126);
+                std::memcpy(_header + 2, &len, 2);
+                _header_size = 4;
             }
             else { //Size extended to 64bits
-                temporary_buffer<char> buff(10);
-                buff.get_write()[0] = header;
-                std::bitset<8> byte2(126);
-                buff.get_write()[1] = static_cast<unsigned char>(127);
-                std::memcpy(buff.share(2, 8).get_write(), &len, 8);
-
-                _header = std::move(buff);
+                _header[0] = header;
+                _header[1] = static_cast<unsigned char>(127);
+                std::memcpy(_header + 2, &len, 8);
+                _header_size = 10;
             }
         }
 
