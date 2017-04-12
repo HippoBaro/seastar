@@ -8,7 +8,6 @@ httpd::connected_websocket::connected_websocket(connected_socket *socket, socket
                                                 request &request) noexcept : _socket(std::move(socket)),
                                                                              remote_adress(remote_adress),
                                                                              _request(request) {
-    //std::cout << "new websocket on core #" << engine().cpu_id() << std::endl;
 }
 
 httpd::connected_websocket::connected_websocket(httpd::connected_websocket &&cs) noexcept : _socket(std::move(cs._socket)),
@@ -36,6 +35,10 @@ future<> httpd::websocket_input_stream::read_fragment() {
             parse_fragment();
         });
     parse_fragment();
+    if (_fragment->_is_empty) {
+        for (auto c : _buf)
+            std::cout << std::bitset<8>(c) << std::endl;
+    }
     return make_ready_future();
 }
 
@@ -43,7 +46,7 @@ future<std::unique_ptr<httpd::websocket_message>> httpd::websocket_input_stream:
     _lastmassage = nullptr;
     return repeat([this] { // gather all fragments and concatenate full message
         return read_fragment().then([this] {
-            if (!_fragment)
+            if (!_fragment || _fragment->_is_empty)
                 return stop_iteration::yes;
             else if (_fragment->fin()) {
                 if (!_lastmassage)
@@ -68,10 +71,12 @@ future<> httpd::websocket_output_stream::write(std::unique_ptr<httpd::websocket_
         return this->_stream.write(std::move(head)).then([this, &frag] {
             return do_for_each(frag->_fragments, [this] (temporary_buffer<char> &buff) {
                 return this->_stream.write(std::move(buff));
-            }).then([this] {
-                return this->_stream.flush();
             });
         });
+    }).then([this] {
+        return this->_stream.flush();
+    }).handle_exception([this] (std::exception_ptr e) {
+        return _stream.close();
     });
 }
 
