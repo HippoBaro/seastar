@@ -76,6 +76,9 @@ void set_routes(routes& r) {
     });
 
     ws_managed_handler->on_message_future([] (const httpd::request& req, websocket_output_stream* ws, std::unique_ptr<httpd::websocket_message> message) {
+        auto tmp = std::move(message->concat());
+        std::cout.write(tmp.get(), tmp.size());
+        std::cout << std::endl;
         return ws->write(std::move(message));
     });
 

@@ -51,7 +51,6 @@ namespace httpd {
                                                                                _is_valid(fragment._is_valid) {
         }
 
-    public:
         bool fin() { return _fin; }
 
         websocket_opcode opcode() { return _opcode; }
@@ -86,6 +85,9 @@ namespace httpd {
         inbound_websocket_fragment(temporary_buffer<char> &raw, uint32_t *index);
 
         inbound_websocket_fragment() : websocket_fragment_base() {}
+
+    private:
+        inline void unmask(char *dst, const char *src, const char *mask, uint64_t length);
     };
 
     class websocket_message {
@@ -131,45 +133,11 @@ namespace httpd {
             _fragments.push_back(std::move(fragment->message));
         }
 
-        void done() {
-            auto header = 0x81;
+        void done();
 
-            uint64_t len = 0;
-            for (auto &fragment : _fragments)
-                len += fragment.size();
+        temporary_buffer<char> concat();
 
-            if (len < 125) { //Size fits 7bits
-                _header[0] = header;
-                _header[1] = static_cast<unsigned char>(len);
-                _header_size = 2;
-            } //Size in extended to 16bits
-            else if (len < std::numeric_limits<uint16_t>::max()) {
-                _header[0] = header;
-                _header[1] = static_cast<unsigned char>(126);
-                std::memcpy(_header + 2, &len, 2);
-                _header_size = 4;
-            }
-            else { //Size extended to 64bits
-                _header[0] = header;
-                _header[1] = static_cast<unsigned char>(127);
-                std::memcpy(_header + 2, &len, 8);
-                _header_size = 10;
-            }
-        }
 
-        temporary_buffer<char> concat() {
-            std::cout << "copying" << std::endl;
-            uint64_t length = 0;
-            for (auto& n : _fragments)
-                length += n.size();
-            temporary_buffer<char> ret(length);
-            length = 0;
-            for (auto& n : _fragments) {
-                std::memcpy(ret.share(length, n.size()).get_write(), n.get(), n.size());
-                length = n.size();
-            }
-            return std::move(ret);
-        }
 
         bool empty() { return _is_empty || opcode == CLOSE; }
 
