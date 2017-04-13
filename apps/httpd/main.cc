@@ -76,9 +76,6 @@ void set_routes(routes& r) {
     });
 
     ws_managed_handler->on_message_future([] (const httpd::request& req, websocket_output_stream* ws, std::unique_ptr<httpd::websocket_message> message) {
-        auto tmp = std::move(message->concat());
-        std::cout.write(tmp.get(), tmp.size());
-        std::cout << std::endl;
         return ws->write(std::move(message));
     });
 
@@ -121,8 +118,6 @@ int main(int ac, char** av) {
         }).then([server, port] {
             return server->listen(port);
         }).then([server, port] {
-            //sprometheus::config config;
-            //prometheus::start(*server, config);
             std::cout << "Seastar HTTP server listening on port " << port << " ...\n";
             engine().at_exit([server] {
                 return server->stop();
