@@ -28,17 +28,13 @@ future<> httpd::websocket_input_stream::read_fragment() {
     };
 
     _fragment = nullptr;
-    if (!_buf || _index == _buf.size())
+    if (!_buf || _index >= _buf.size())
         return _stream.read().then([this, parse_fragment](temporary_buffer<char> buf) {
             _buf = std::move(buf);
             _index = 0;
             parse_fragment();
         });
     parse_fragment();
-    if (_fragment->_is_empty) {
-        for (auto c : _buf)
-            std::cout << std::bitset<8>(c) << std::endl;
-    }
     return make_ready_future();
 }
 
@@ -64,6 +60,10 @@ future<std::unique_ptr<httpd::websocket_message>> httpd::websocket_input_stream:
     });
 }
 
+/*
+ * When the write is called and if (!_buf || _index >= _buf.size()) == false, it would make sense
+ * to buff it and flush everything at once before the next read().
+ */
 future<> httpd::websocket_output_stream::write(std::unique_ptr<httpd::websocket_message> message) {
     message->done();
     return do_with(std::move(message), [this] (std::unique_ptr<httpd::websocket_message> &frag) {

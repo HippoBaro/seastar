@@ -109,6 +109,7 @@ private:
     future<bool> on_message_internal(const httpd::request& req, websocket_output_stream* ws, std::unique_ptr<httpd::websocket_message> message) {
         switch (message->opcode){
             case TEXT:
+                //FIXME Check that buffer is valid UTF-8
             case BINARY:
                 return _on_message(req, ws, std::move(message)).then([] {
                     return false;

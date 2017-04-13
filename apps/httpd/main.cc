@@ -70,15 +70,12 @@ void set_routes(routes& r) {
 
     auto ws_managed_handler = new websocket_handler();
 
-    ws_managed_handler->on_connection([] (const httpd::request& req, websocket_output_stream* ws) {
+    ws_managed_handler->on_connection_future([] (const httpd::request& req, websocket_output_stream* ws) {
         temporary_buffer<char> test("Hello from seastar !", 20);
         return ws->write(websocket_opcode::TEXT, std::move(test));
     });
 
     ws_managed_handler->on_message_future([] (const httpd::request& req, websocket_output_stream* ws, std::unique_ptr<httpd::websocket_message> message) {
-        auto tmp = std::move(message->concat());
-        std::cout.write(tmp.get(), tmp.size());
-        std::cout << std::endl;
         return ws->write(std::move(message));
     });
 
@@ -106,23 +103,21 @@ void set_routes(routes& r) {
 int main(int ac, char** av) {
     app_template app;
     app.add_options()("port", bpo::value<uint16_t>()->default_value(10000),
-            "HTTP Server port");
+                      "HTTP Server port");
     return app.run_deprecated(ac, av, [&] {
-        auto&& config = app.configuration();
+        auto &&config = app.configuration();
         uint16_t port = config["port"].as<uint16_t>();
         auto server = new http_server_control();
         auto rb = make_shared<api_registry_builder>("apps/httpd/");
         server->start().then([server] {
             return server->set_routes(set_routes);
-        }).then([server, rb]{
-            return server->set_routes([rb](routes& r){rb->set_api_doc(r);});
-        }).then([server, rb]{
-            return server->set_routes([rb](routes& r) {rb->register_function(r, "demo", "hello world application");});
+        }).then([server, rb] {
+            return server->set_routes([rb](routes &r) { rb->set_api_doc(r); });
+        }).then([server, rb] {
+            return server->set_routes([rb](routes &r) { rb->register_function(r, "demo", "hello world application"); });
         }).then([server, port] {
             return server->listen(port);
         }).then([server, port] {
-            //sprometheus::config config;
-            //prometheus::start(*server, config);
             std::cout << "Seastar HTTP server listening on port " << port << " ...\n";
             engine().at_exit([server] {
                 return server->stop();
@@ -130,3 +125,4 @@ int main(int ac, char** av) {
         });
     });
 }
+

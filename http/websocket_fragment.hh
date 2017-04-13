@@ -96,12 +96,14 @@ namespace httpd {
         char _header[10];
         size_t _header_size = 0;
         std::vector<temporary_buffer<char>> _fragments;
+        temporary_buffer<char> _concatenated;
 
         websocket_message() noexcept : _is_empty(true) { }
         websocket_message(const websocket_message &) = delete;
         websocket_message(websocket_message &&other) noexcept : opcode(other.opcode),
                                                                 _fragments(std::move(other._fragments)),
-                                                                _is_empty(other._is_empty) {
+                                                                _concatenated(std::move(other._concatenated)),
+                                                                _is_empty(other._is_empty)  {
         }
 
         void operator=(const websocket_message&) = delete;
@@ -109,6 +111,7 @@ namespace httpd {
             if (this != &other) {
                 opcode = other.opcode;
                 _fragments = std::move(other._fragments);
+                _concatenated = std::move(other._concatenated);
                 _is_empty = other._is_empty;
             }
             return *this;
@@ -135,9 +138,7 @@ namespace httpd {
 
         void done();
 
-        temporary_buffer<char> concat();
-
-
+        temporary_buffer<char> & concat();
 
         bool empty() { return _is_empty || opcode == CLOSE; }
 

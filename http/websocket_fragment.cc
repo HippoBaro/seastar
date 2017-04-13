@@ -47,11 +47,10 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
     }
 
     if (_masked && raw.size() >= *i + _lenght + sizeof(uint32_t)) {
+        //message is masked
         uint64_t k = *i;
         *i += sizeof(uint32_t);
-
         message = std::move(raw.share(*i, _lenght));
-
         unmask(buf + *i, buf + *i, buf + k, _lenght);
         _is_empty = false;
         *i += _lenght;
@@ -63,7 +62,7 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
 }
 
 void httpd::websocket_message::done() {
-    auto header = 0x81;
+    const auto header = opcode ^ 0x80;
 
     uint64_t len = 0;
     for (auto &fragment : _fragments)
@@ -90,8 +89,10 @@ void httpd::websocket_message::done() {
     }
 }
 
-temporary_buffer<char> httpd::websocket_message::concat() {
-    std::cout << "copying" << std::endl;
+temporary_buffer<char> & httpd::websocket_message::concat() {
+    if (!_concatenated.empty())
+        return _concatenated;
+
     uint64_t length = 0;
     for (auto& n : _fragments)
         length += n.size();
@@ -101,7 +102,7 @@ temporary_buffer<char> httpd::websocket_message::concat() {
         std::memcpy(ret.share(length, n.size()).get_write(), n.get(), n.size());
         length = n.size();
     }
-    return std::move(ret);
+    return _concatenated = std::move(ret);
 }
 
 
