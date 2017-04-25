@@ -29,7 +29,6 @@ namespace httpd {
         bool _rsv3 = false;
         bool _rsv1 = false;
         bool _masked = false;
-        temporary_buffer<char> _maskkey;
 
     public:
         bool _is_empty = false;
@@ -45,7 +44,6 @@ namespace httpd {
                                                                                _rsv3(fragment.rsv3()),
                                                                                _rsv1(fragment.rsv1()),
                                                                                _masked(fragment.masked()),
-                                                                               _maskkey(std::move(fragment._maskkey)),
                                                                                _is_empty(fragment._is_empty),
                                                                                message(std::move(fragment.message)),
                                                                                _is_valid(fragment._is_valid) {
@@ -55,7 +53,7 @@ namespace httpd {
 
         websocket_opcode opcode() { return _opcode; }
 
-        uint64_t &length() { return _lenght; }
+        uint64_t length() { return _lenght; }
 
         bool rsv2() { return _rsv2; }
 
@@ -117,19 +115,17 @@ namespace httpd {
             return *this;
         }
 
-        websocket_message(std::unique_ptr<websocket_fragment_base> fragment) noexcept : _is_empty(false) {
-            _fragments.push_back(std::move(fragment->message));
-            opcode = fragment->opcode();
+        websocket_message(std::unique_ptr<websocket_fragment_base> fragment) noexcept :
+                websocket_message(fragment->opcode(), std::move(fragment->message)) {
         }
 
-        websocket_message(websocket_opcode kind, temporary_buffer<char> message) noexcept : _is_empty(false) {
+        websocket_message(websocket_opcode kind, sstring message) noexcept :
+                websocket_message(kind, std::move(message).release()) {
+        }
+
+        websocket_message(websocket_opcode kind, temporary_buffer<char> message) noexcept : opcode(kind),
+                                                                                            _is_empty(false) {
             _fragments.push_back(std::move(message));
-            opcode = kind;
-        }
-
-        websocket_message(websocket_opcode kind, sstring message) noexcept : _is_empty(false) {
-            _fragments.push_back(std::move(message).release());
-            opcode = kind;
         }
 
         void append(std::unique_ptr<websocket_fragment_base> fragment) {

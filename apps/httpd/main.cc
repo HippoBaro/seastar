@@ -57,12 +57,11 @@ void set_routes(routes& r) {
         return do_with(std::move(input), std::move(output), [] (websocket_input_stream &input,
                                                                 websocket_output_stream &output) {
             return repeat([&input, &output] {
-                return input.read().then([&output](std::unique_ptr<httpd::websocket_message> buf){
+                return input.read().then([&output](std::unique_ptr<httpd::websocket_message> buf) {
                     if (!buf)
                         return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
-                    return output.write(std::move(buf)).then([] {
-                        return stop_iteration::no;
-                    });
+                    output.write(std::move(buf));
+                    return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::no);
                 });
             });
         });

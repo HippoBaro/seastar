@@ -42,7 +42,7 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
         *i += sizeof(uint16_t);
     }
     else if (_lenght == 127 && raw.size() >= *i + sizeof(uint64_t)) {
-        _lenght = ntohl(*reinterpret_cast<uint64_t*>(buf + *i));
+        _lenght = ntohl(*reinterpret_cast<uint64_t*>(buf + *i)); //FIXME ntohl is 32bit only, we want 64
         *i += sizeof(uint64_t);
     }
 
@@ -64,27 +64,28 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
 void httpd::websocket_message::done() {
     const auto header = opcode ^ 0x80;
 
+    assert(_header_size == 0 && "httpd::websocket_message::done() should be called exactly once");
     uint64_t len = 0;
     for (auto &fragment : _fragments)
         len += fragment.size();
 
     if (len < 125) { //Size fits 7bits
         _header[0] = header;
-        _header[1] = static_cast<unsigned char>(len);
+        _header[1] = static_cast<uint8_t>(len);
         _header_size = 2;
     } //Size in extended to 16bits
     else if (len < std::numeric_limits<uint16_t>::max()) {
         _header[0] = header;
-        _header[1] = static_cast<unsigned char>(126);
-        auto s = htons(len);
-        std::memcpy(_header + 2, &s, 2);
+        _header[1] = 126;
+        auto s = htons(static_cast<uint16_t>(len));
+        std::memcpy(_header + sizeof(uint16_t), &s, sizeof(uint16_t));
         _header_size = 4;
     }
     else { //Size extended to 64bits
         _header[0] = header;
-        _header[1] = static_cast<unsigned char>(127);
-        auto l = htonl(len);
-        std::memcpy(_header + 2, &l, 8);
+        _header[1] = 127;
+        auto l = htonl(len); //FIXME htonl is 32bit only, we want 64
+        std::memcpy(_header + sizeof(uint16_t), &l, sizeof(uint64_t));
         _header_size = 10;
     }
 }
@@ -107,13 +108,6 @@ temporary_buffer<char> & httpd::websocket_message::concat() {
 
 
 inline void httpd::inbound_websocket_fragment::unmask(char *dst, const char *src, const char *mask, uint64_t length) {
-    for (uint64_t j = 0; j < _lenght; ++j) {
+    for (uint64_t j = 0; j < length; ++j)
         dst[j] = src[j] ^ mask[j % 4];
-    }
-/*    for (unsigned int n = (length >> 2) + 1; n; n--) {
-        *(dst++) = *(src++) ^ mask[0];
-        *(dst++) = *(src++) ^ mask[1];
-        *(dst++) = *(src++) ^ mask[2];
-        *(dst++) = *(src++) ^ mask[3];
-    }*/
 }

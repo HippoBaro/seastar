@@ -61,13 +61,13 @@ future<std::unique_ptr<httpd::websocket_message>> httpd::websocket_input_stream:
 }
 
 /*
- * When the write is called and if (!_buf || _index >= _buf.size()) == false, it would make sense
+ * When the write is called and (!_buf || _index >= _buf.size()) == false, it would make sense
  * to buff it and flush everything at once before the next read().
  */
 future<> httpd::websocket_output_stream::write(std::unique_ptr<httpd::websocket_message> message) {
     message->done();
     return do_with(std::move(message), [this] (std::unique_ptr<httpd::websocket_message> &frag) {
-        temporary_buffer<char> head((char *)&frag->_header, frag->_header_size);
+        temporary_buffer<char> head((char *)&frag->_header, frag->_header_size); //FIXME copy memory to avoid mixed writes
         return this->_stream.write(std::move(head)).then([this, &frag] {
             return do_for_each(frag->_fragments, [this] (temporary_buffer<char> &buff) {
                 return this->_stream.write(std::move(buff));

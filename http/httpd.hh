@@ -88,10 +88,6 @@ namespace httpd {
             }
         }
     public:
-
-        typedef std::function<future<void>(std::unique_ptr<request> req, connected_socket fd)> future_ws_handler_function;
-
-        std::unique_ptr<future_ws_handler_function> _websocket_handler = nullptr;
         routes _routes;
 
         explicit http_server(const sstring& name) : _stats(*this, name) {
@@ -225,7 +221,6 @@ namespace httpd {
             future<> do_response_loop() {
                 return _replies.pop_eventually().then(
                         [this] (std::unique_ptr<reply> resp) {
-
                             if (!resp) {
                                 // eof
                                 return make_ready_future<>();
