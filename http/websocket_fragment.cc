@@ -27,22 +27,24 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
     auto buf = raw.get_write();
 
     //First header byte
-    _fin = buf[*i] & 128;
-    _rsv1 = buf[*i] & 64;
+    _fin = (bool) (buf[*i] & 128);
+    _rsv1 = (bool) (buf[*i] & 64);
     _opcode = static_cast<websocket_opcode>(buf[*i] & 15);
     *i += sizeof(uint8_t);
 
     //Second header byte
-    _masked = buf[*i] & 128;
-    _lenght = buf[*i] & 127;
+    _masked = (bool) (buf[*i] & 128);
+    _lenght = (uint64_t) (buf[*i] & 127);
+    _lenght = net::ntoh(_lenght);
+
     *i += sizeof(uint8_t);
 
     if (_lenght == 126 && raw.size() >= *i + sizeof(uint16_t)) {
-        _lenght = ntohs(*reinterpret_cast<uint16_t*>(buf + *i));
+        _lenght = net::ntoh(*reinterpret_cast<uint16_t*>(buf + *i));
         *i += sizeof(uint16_t);
     }
     else if (_lenght == 127 && raw.size() >= *i + sizeof(uint64_t)) {
-        _lenght = ntohl(*reinterpret_cast<uint64_t*>(buf + *i)); //FIXME ntohl is 32bit only, we want 64
+        _lenght = net::ntoh(*reinterpret_cast<uint64_t*>(buf + *i));
         *i += sizeof(uint64_t);
     }
 
@@ -71,20 +73,20 @@ void httpd::websocket_message::done() {
 
     if (len < 125) { //Size fits 7bits
         _header[0] = header;
-        _header[1] = static_cast<uint8_t>(len);
+        _header[1] = net::hton(static_cast<uint8_t>(len));
         _header_size = 2;
     } //Size in extended to 16bits
     else if (len < std::numeric_limits<uint16_t>::max()) {
         _header[0] = header;
         _header[1] = 126;
-        auto s = htons(static_cast<uint16_t>(len));
+        auto s = net::hton(static_cast<uint16_t>(len));
         std::memcpy(_header + sizeof(uint16_t), &s, sizeof(uint16_t));
         _header_size = 4;
     }
     else { //Size extended to 64bits
         _header[0] = header;
         _header[1] = 127;
-        auto l = htonl(len); //FIXME htonl is 32bit only, we want 64
+        auto l = net::hton(len);
         std::memcpy(_header + sizeof(uint16_t), &l, sizeof(uint64_t));
         _header_size = 10;
     }
