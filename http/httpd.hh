@@ -139,6 +139,12 @@ namespace httpd {
             });
         }
         class connection : public boost::intrusive::list_base_hook<> {
+            enum connection_status {
+                keep_open = 0,
+                close,
+                detach
+            };
+
             http_server& _server;
             connected_socket _fd;
             input_stream<char> _read_buf;
@@ -150,8 +156,10 @@ namespace httpd {
             std::unique_ptr<reply> _resp;
             socket_address _addr;
             // null element marks eof
-            queue<std::unique_ptr<reply>> _replies { 10 };bool _done = false;
+            queue<std::unique_ptr<reply>> _replies { 10 };
+            connection_status _done = keep_open;
         public:
+
             connection(http_server& server, connected_socket&& fd,
                        socket_address addr)
                     : _server(server), _fd(std::move(fd)), _read_buf(_fd.input()), _write_buf(
@@ -168,7 +176,16 @@ namespace httpd {
             future<> process() {
                 // Launch read and write "threads" simultaneously:
                 return when_all(read(), respond()).then(
-                        [] (std::tuple<future<>, future<>> joined) {
+                        [this] (std::tuple<future<>, future<>> joined) {
+                            std::cout << _done << std::endl;
+
+                            if (_done == detach) {
+                                std::cout << "detatching" << std::endl;
+                                sstring url = set_query_param(*_req.get());
+                                return _server._routes.handle_ws(url, std::move(connected_websocket(&_fd, _addr, *_req.get())));
+                            }
+
+                            std::cout << "disconnected" << std::endl;
                             // FIXME: notify any exceptions in joined?
                             return make_ready_future<>();
                         });
@@ -178,7 +195,7 @@ namespace httpd {
                 _fd.shutdown_output();
             }
             future<> read() {
-                return do_until([this] {return _done;}, [this] {
+                return do_until([this] {return _done != keep_open;}, [this] {
                     return read_one();
                 }).then_wrapped([this] (future<> f) {
                     // swallow error
@@ -186,16 +203,21 @@ namespace httpd {
                         _server._read_errors++;
                     }
                     f.ignore_ready_future();
+                    if (_done == detach)
+                        return make_ready_future();
                     return _replies.push_eventually( {});
                 }).finally([this] {
-                    return _read_buf.close();
+                    if (_done != detach)
+                        return _read_buf.close();
+                    return make_ready_future<>();
                 });
             }
             future<> read_one() {
                 _parser.init();
+                std::cout << "reading" << std::endl;
                 return _read_buf.consume(_parser).then([this] () mutable {
                     if (_parser.eof()) {
-                        _done = true;
+                        _done = close;
                         return make_ready_future<>();
                     }
                     ++_server._requests_served;
@@ -203,7 +225,7 @@ namespace httpd {
 
                     return _replies.not_full().then([req = std::move(req), this] () mutable {
                         return generate_reply(std::move(req));
-                    }).then([this](bool done) {
+                    }).then([this](connection_status done) {
                         _done = done;
                     });
                 });
@@ -215,10 +237,13 @@ namespace httpd {
                         _server._respond_errors++;
                     }
                     f.ignore_ready_future();
+                    if (_done == detach)
+                        return _write_buf.flush().then([] { return make_ready_future<>(); });
                     return _write_buf.close();
                 });
             }
             future<> do_response_loop() {
+                std::cout << "response" << std::endl;
                 return _replies.pop_eventually().then(
                         [this] (std::unique_ptr<reply> resp) {
                             if (!resp) {
@@ -227,6 +252,8 @@ namespace httpd {
                             }
                             _resp = std::move(resp);
                             return start_response().then([this] {
+                                if (_done == detach)
+                                    return make_ready_future<>();
                                 return do_response_loop();
                             });
                         });
@@ -350,7 +377,7 @@ namespace httpd {
                 return req._url.substr(0, pos);
             }
 
-            future<bool> generate_reply(std::unique_ptr<request> req) {
+            future<connection_status> generate_reply(std::unique_ptr<request> req) {
                 auto resp = std::make_unique<reply>();
                 bool conn_keep_alive = false;
                 bool conn_close = false;
@@ -364,7 +391,7 @@ namespace httpd {
                     } else if (it->second.find("Upgrade") != std::string::npos) {
                         auto upgrade = req->_headers.find("Upgrade");
                         if (upgrade != req->_headers.end() && upgrade->second == "websocket")
-                            return upgrade_websocket(std::move(req)).then([] { return true; }); //websocket upgrade
+                            return upgrade_websocket(std::move(req)); //websocket upgrade
                     }
                 }
                 bool should_close;
@@ -388,13 +415,16 @@ namespace httpd {
                 return _server._routes.handle(url, std::move(req), std::move(resp)).then([this, should_close, version = std::move(version)](std::unique_ptr<reply> rep) {
                     rep->set_version(version).done();
                     this->_replies.push(std::move(rep));
-                    return make_ready_future<bool>(should_close);
+                    if (!should_close)
+                        return make_ready_future<connection_status>(keep_open);
+                    return make_ready_future<connection_status>(close);
                 });
             }
 
-            future<> upgrade_websocket(std::unique_ptr<request> req) {
+            future<connection_status> upgrade_websocket(std::unique_ptr<request> req) {
                 constexpr char websocket_uuid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
                 constexpr size_t websocket_uuid_len = 36;
+                connection_status done = detach;
 
                 sstring url = set_query_param(*req.get());
                 auto resp = std::make_unique<reply>();
@@ -425,23 +455,17 @@ namespace httpd {
 
                     resp->_headers["Sec-WebSocket-Accept"] = sstring(base64.c_str(), base64.size() -1);
                     resp->set_status(reply::status_type::switching_protocols).done();
-
-                    _replies.push(std::move(resp));
-
-                    //If we don't wait, the HTTP response might not be flushed before user-code start sending messages
-                    //resulting in malformed handcheck response.
-                    return do_until([this] {
-                        return _replies.empty();
-                    }, [this] { return _write_buf.flush(); }).then([this, req = std::move(req), url] {
-                        return _server._routes.handle_ws(url, std::move(connected_websocket(&_fd, _addr, *req.get())));
-                    });
+                    _req = std::move(req);
                 }
                 else {
                     //Refused
+                    _done = done = close;
                     resp->set_status(reply::status_type::bad_request);
                 }
                 resp->done();
-                return this->_replies.push_eventually(std::move(resp));
+                _done = done = detach;
+                _replies.push(std::move(resp));
+                return make_ready_future<connection_status>(done);
             }
 
             future<> write_body() {
