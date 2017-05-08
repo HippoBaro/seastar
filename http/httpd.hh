@@ -204,9 +204,9 @@ namespace httpd {
                         return make_ready_future();
                     return _replies.push_eventually( {});
                 }).finally([this] {
-                    if (_done != detach)
-                        return _read_buf.close();
-                    return make_ready_future<>();
+                    if (_done == detach)
+                        return make_ready_future<>();
+                    return _read_buf.close();
                 });
             }
             future<> read_one() {
@@ -247,9 +247,9 @@ namespace httpd {
                             }
                             _resp = std::move(resp);
                             return start_response().then([this] {
-                                if (_done == detach)
-                                    return make_ready_future<>();
-                                return do_response_loop();
+                                if (_done != close)
+                                    return do_response_loop();
+                                return make_ready_future<>();
                             });
                         });
             }
@@ -396,6 +396,7 @@ namespace httpd {
                 if (req->_version == "1.0") {
                     if (conn_keep_alive) {
                         resp->_headers["Connection"] = "Keep-Alive";
+                        std::cout << "keep alive" << std::endl;
                     }
                     should_close = !conn_keep_alive;
                 } else if (req->_version == "1.1") {
@@ -410,9 +411,9 @@ namespace httpd {
                 return _server._routes.handle(url, std::move(req), std::move(resp)).then([this, should_close, version = std::move(version)](std::unique_ptr<reply> rep) {
                     rep->set_version(version).done();
                     this->_replies.push(std::move(rep));
-                    if (!should_close)
-                        return make_ready_future<connection_status>(keep_open);
-                    return make_ready_future<connection_status>(close);
+                    if (should_close)
+                        return make_ready_future<connection_status>(close);
+                    return make_ready_future<connection_status>(keep_open);
                 });
             }
 
