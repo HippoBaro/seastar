@@ -35,7 +35,6 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
     //Second header byte
     _masked = (bool) (buf[*i] & 128);
     _lenght = (uint64_t) (buf[*i] & 127);
-    _lenght = net::ntoh(_lenght);
 
     *i += sizeof(uint8_t);
 
@@ -64,7 +63,7 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
 }
 
 void httpd::websocket_message::done() {
-    const auto header = opcode ^ 0x80;
+    const auto header = opcode ^ 0x80; //FIXME Dynamically construct header
 
     assert(_header_size == 0 && "httpd::websocket_message::done() should be called exactly once");
     uint64_t len = 0;

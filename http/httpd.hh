@@ -427,15 +427,13 @@ namespace httpd {
                     resp->set_status(reply::status_type::switching_protocols).done();
 
                     _replies.push(std::move(resp));
+
+                    //If we don't wait, the HTTP response might not be flushed before user-code start sending messages
+                    //resulting in malformed handcheck response.
                     return do_until([this] {
                         return _replies.empty();
-                    }, [this] {
-                        //If we don't wait, the HTTP response might not be flushed before user-code start sending messages
-                        //resulting in malformed handcheck response.
-                        return sleep(std::chrono::milliseconds(30)); //FIXME this is awful
-                    }).then([this, req = std::move(req), url] {
-                        auto ws = connected_websocket(&_fd, _addr, *req.get());
-                        return _server._routes.handle_ws(url, std::move(ws));
+                    }, [this] { return _write_buf.flush(); }).then([this, req = std::move(req), url] {
+                        return _server._routes.handle_ws(url, std::move(connected_websocket(&_fd, _addr, *req.get())));
                     });
                 }
                 else {

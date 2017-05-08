@@ -72,9 +72,9 @@ future<> httpd::websocket_output_stream::write(std::unique_ptr<httpd::websocket_
             return do_for_each(frag->_fragments, [this] (temporary_buffer<char> &buff) {
                 return this->_stream.write(std::move(buff));
             });
+        }).then([this] {
+            return this->_stream.flush();
         });
-    }).then([this] {
-        return this->_stream.flush();
     }).handle_exception([this] (std::exception_ptr e) {
         return _stream.close();
     });
