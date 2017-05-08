@@ -177,15 +177,12 @@ namespace httpd {
                 // Launch read and write "threads" simultaneously:
                 return when_all(read(), respond()).then(
                         [this] (std::tuple<future<>, future<>> joined) {
-                            std::cout << _done << std::endl;
-
+                            //The connection is now detached. It exist still but outside of read and write fibers
                             if (_done == detach) {
-                                std::cout << "detatching" << std::endl;
                                 sstring url = set_query_param(*_req.get());
                                 return _server._routes.handle_ws(url, std::move(connected_websocket(&_fd, _addr, *_req.get())));
                             }
 
-                            std::cout << "disconnected" << std::endl;
                             // FIXME: notify any exceptions in joined?
                             return make_ready_future<>();
                         });
@@ -214,7 +211,6 @@ namespace httpd {
             }
             future<> read_one() {
                 _parser.init();
-                std::cout << "reading" << std::endl;
                 return _read_buf.consume(_parser).then([this] () mutable {
                     if (_parser.eof()) {
                         _done = close;
@@ -243,7 +239,6 @@ namespace httpd {
                 });
             }
             future<> do_response_loop() {
-                std::cout << "response" << std::endl;
                 return _replies.pop_eventually().then(
                         [this] (std::unique_ptr<reply> resp) {
                             if (!resp) {
