@@ -19,7 +19,7 @@ namespace httpd {
         RESERVED = 0xB
     };
 
-    class websocket_fragment_base {
+    class inbound_websocket_fragment {
     protected:
 
         bool _fin = false;
@@ -35,54 +35,67 @@ namespace httpd {
         temporary_buffer<char> message;
         bool _is_valid = false;
 
-        websocket_fragment_base() : _is_empty(true), _is_valid(false) {}
-
-        websocket_fragment_base(websocket_fragment_base &&fragment) noexcept : _fin(fragment.fin()),
-                                                                               _opcode(fragment.opcode()),
-                                                                               _lenght(fragment.length()),
-                                                                               _rsv2(fragment.rsv2()),
-                                                                               _rsv3(fragment.rsv3()),
-                                                                               _rsv1(fragment.rsv1()),
-                                                                               _masked(fragment.masked()),
-                                                                               _is_empty(fragment._is_empty),
-                                                                               message(std::move(fragment.message)),
-                                                                               _is_valid(fragment._is_valid) {
-        }
-
-        bool fin() { return _fin; }
-
-        websocket_opcode opcode() { return _opcode; }
-
-        uint64_t length() { return _lenght; }
-
-        bool rsv2() { return _rsv2; }
-
-        bool rsv3() { return _rsv3; }
-
-        bool rsv1() { return _rsv1; }
-
-        bool masked() { return _masked; }
-
-        bool valid() {
-            return !((rsv1() || rsv2() || rsv3() || (opcode() > 2 && opcode() < 8) ||
-                     opcode() > 10 || (opcode() > 2 && (!fin() || length() > 125))));
-        }
-
-        operator bool() { return !_is_empty && valid(); }
-    };
-
-    class inbound_websocket_fragment : public websocket_fragment_base {
-
-    public:
-
         inbound_websocket_fragment(const inbound_websocket_fragment &) = delete;
 
-        inbound_websocket_fragment(inbound_websocket_fragment &&other) noexcept : websocket_fragment_base(std::move(other)) {
+        inbound_websocket_fragment(inbound_websocket_fragment &&fragment) noexcept : _fin(fragment._fin),
+                                                                                  _opcode(fragment._opcode),
+                                                                                  _lenght(fragment._lenght),
+                                                                                  _rsv2(fragment._rsv2),
+                                                                                  _rsv3(fragment._rsv3),
+                                                                                  _rsv1(fragment._rsv1),
+                                                                                  _masked(fragment._masked),
+                                                                                  _is_empty(fragment._is_empty),
+                                                                                  message(std::move(fragment.message)),
+                                                                                  _is_valid(fragment._is_valid) {
         }
 
         inbound_websocket_fragment(temporary_buffer<char> &raw, uint32_t *index);
 
-        inbound_websocket_fragment() : websocket_fragment_base() {}
+        inbound_websocket_fragment() : _is_empty(true), _is_valid(false) {}
+
+        inbound_websocket_fragment& operator=(const inbound_websocket_fragment&) = delete;
+        inbound_websocket_fragment& operator=(inbound_websocket_fragment &&fragment) {
+            if (*this != fragment) {
+                _fin = fragment._fin;
+                _opcode = fragment._opcode;
+                _lenght = fragment._lenght;
+                _rsv2 = fragment._rsv2;
+                _rsv3 = fragment._rsv3;
+                _rsv1 = fragment._rsv1;
+                _masked = fragment._masked;
+                _is_empty = fragment._is_empty;
+                message = std::move(fragment.message);
+                _is_valid= fragment._is_valid;
+            }
+            return *this;
+        }
+
+        bool fin() { return _fin; }
+        websocket_opcode opcode() { return _opcode; }
+        uint64_t length() { return _lenght; }
+        bool rsv2() { return _rsv2; }
+        bool rsv3() { return _rsv3; }
+        bool rsv1() { return _rsv1; }
+        bool masked() { return _masked; }
+        bool valid() {
+            return !((rsv1() || rsv2() || rsv3() || (opcode() > 2 && opcode() < 8) ||
+                      opcode() > 10 || (opcode() > 2 && (!fin() || length() > 125))));
+        }
+
+        void reset() {
+            _fin = false;
+            _opcode = RESERVED;
+            _lenght = 0;
+            _rsv2 = false;
+            _rsv3 = false;
+            _rsv1 = false;
+            _masked = false;
+            _is_empty = false;
+            message = temporary_buffer<char>();
+            _is_valid = false;
+        }
+
+        operator bool() { return !_is_empty && valid(); }
 
     private:
         inline void unmask(char *dst, const char *src, const char *mask, uint64_t length);
@@ -115,8 +128,10 @@ namespace httpd {
             return *this;
         }
 
-        websocket_message(std::unique_ptr<websocket_fragment_base> fragment) noexcept :
-                websocket_message(fragment->opcode(), std::move(fragment->message)) {
+        explicit operator bool() const { return !_is_empty; }
+
+        websocket_message(inbound_websocket_fragment fragment) noexcept :
+                websocket_message(fragment.opcode(), std::move(fragment.message)) {
         }
 
         websocket_message(websocket_opcode kind, sstring message) noexcept :
@@ -128,8 +143,8 @@ namespace httpd {
             _fragments.push_back(std::move(message));
         }
 
-        void append(std::unique_ptr<websocket_fragment_base> fragment) {
-            _fragments.push_back(std::move(fragment->message));
+        void append(inbound_websocket_fragment fragment) {
+            _fragments.push_back(std::move(fragment.message));
         }
 
         void done();
@@ -137,6 +152,14 @@ namespace httpd {
         temporary_buffer<char> & concat();
 
         bool empty() { return _is_empty || opcode == CLOSE; }
+
+        void reset() {
+            opcode = RESERVED;
+            _header_size = 0;
+            _fragments.clear();
+            _concatenated = temporary_buffer<char>();
+            _is_empty = true;
+        }
 
     private:
         bool _is_empty;

@@ -27,20 +27,20 @@ protected:
 };
 
 typedef std::function<future<>(const httpd::request&, websocket_output_stream* ws)> future_ws_on_dis_connected;
-typedef std::function<future<>(const httpd::request&, websocket_output_stream* ws, std::unique_ptr<httpd::websocket_message> message)> future_ws_on_message;
+typedef std::function<future<>(const httpd::request&, websocket_output_stream* ws, httpd::websocket_message message)> future_ws_on_message;
 
 typedef std::function<void(const httpd::request&, websocket_output_stream* ws)> void_ws_on_dis_connected;
-typedef std::function<void(const httpd::request&, websocket_output_stream* ws, std::unique_ptr<httpd::websocket_message> message)> void_ws_on_message;
+typedef std::function<void(const httpd::request&, websocket_output_stream* ws, httpd::websocket_message message)> void_ws_on_message;
 
 class websocket_handler : public httpd::handler_websocket_base {
 
 public:
     websocket_handler() : _on_connection([] (const httpd::request&, websocket_output_stream* ws) { return make_ready_future(); }),
-                          _on_message([] (const httpd::request&, websocket_output_stream* ws, std::unique_ptr<httpd::websocket_message> message) { return make_ready_future(); }),
+                          _on_message([] (const httpd::request&, websocket_output_stream* ws, httpd::websocket_message message) { return make_ready_future(); }),
                           _on_disconnection([] (const httpd::request&, websocket_output_stream* ws) { return make_ready_future(); }),
-                          _on_pong([] (const httpd::request&, websocket_output_stream* ws, std::unique_ptr<httpd::websocket_message> message) { return make_ready_future(); }),
-                          _on_ping([] (const httpd::request&, websocket_output_stream* ws, std::unique_ptr<httpd::websocket_message> message) {
-                              message->opcode = websocket_opcode::PONG;
+                          _on_pong([] (const httpd::request&, websocket_output_stream* ws, httpd::websocket_message message) { return make_ready_future(); }),
+                          _on_ping([] (const httpd::request&, websocket_output_stream* ws, httpd::websocket_message message) {
+                              message.opcode = websocket_opcode::PONG;
                               return ws->write(std::move(message));
                           })  {}
 
@@ -52,7 +52,7 @@ public:
                                                                                    websocket_output_stream &output) {
             return _on_connection(ws._request, &output).then([this, &ws, &input, &output] {
                 return repeat([this, &input, &output, &ws] {
-                    return input.read().then([this, &output, &ws](std::unique_ptr<httpd::websocket_message> buf) {
+                    return input.read().then([this, &output, &ws](httpd::websocket_message buf) {
                         if (!buf)
                             return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
                         return on_message_internal(ws._request, &output, std::move(buf)).then([] (bool close) {
@@ -66,21 +66,21 @@ public:
 
     void on_message(const void_ws_on_message & handler) {
         _on_message = [handler](const httpd::request& req, websocket_output_stream *ws,
-                                std::unique_ptr<httpd::websocket_message> message) {
+                                httpd::websocket_message message) {
             handler(req, ws, std::move(message));
             return make_ready_future();
         };
     }
     void on_ping(const void_ws_on_message & handler) {
         _on_ping = [handler](const httpd::request& req, websocket_output_stream *ws,
-                             std::unique_ptr<httpd::websocket_message> message) {
+                             httpd::websocket_message message) {
             handler(req, ws, std::move(message));
             return make_ready_future();
         };
     }
     void on_pong(const void_ws_on_message & handler) {
         _on_pong = [handler](const httpd::request& req, websocket_output_stream *ws,
-                             std::unique_ptr<httpd::websocket_message> message) {
+                             httpd::websocket_message message) {
             handler(req, ws, std::move(message));
             return make_ready_future();
         };
@@ -106,8 +106,8 @@ public:
 
 private:
 
-    future<bool> on_message_internal(const httpd::request& req, websocket_output_stream* ws, std::unique_ptr<httpd::websocket_message> message) {
-        switch (message->opcode){
+    future<bool> on_message_internal(const httpd::request& req, websocket_output_stream* ws, httpd::websocket_message message) {
+        switch (message.opcode){
             case TEXT:
                 //FIXME Check that buffer is valid UTF-8
             case BINARY:

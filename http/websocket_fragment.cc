@@ -23,7 +23,8 @@
 |                     Payload Data continued ...                |
 +---------------------------------------------------------------+
 */
-httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<char> &raw, uint32_t *i) : websocket_fragment_base() {
+httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<char> &raw, uint32_t *i) :
+        inbound_websocket_fragment() {
     auto buf = raw.get_write();
 
     //First header byte

@@ -57,7 +57,7 @@ void set_routes(routes& r) {
         return do_with(std::move(input), std::move(output), [] (websocket_input_stream &input,
                                                                 websocket_output_stream &output) {
             return repeat([&input, &output] {
-                return input.read().then([&output](std::unique_ptr<httpd::websocket_message> buf) {
+                return input.read().then([&output](httpd::websocket_message buf) {
                     if (!buf)
                         return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
                     output.write(std::move(buf));
@@ -74,7 +74,7 @@ void set_routes(routes& r) {
         return ws->write(websocket_opcode::TEXT, std::move(test));
     });
 
-    ws_managed_handler->on_message_future([] (const httpd::request& req, websocket_output_stream* ws, std::unique_ptr<httpd::websocket_message> message) {
+    ws_managed_handler->on_message_future([] (const httpd::request& req, websocket_output_stream* ws, httpd::websocket_message message) {
         return ws->write(std::move(message));
     });
 
