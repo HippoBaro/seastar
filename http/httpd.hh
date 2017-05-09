@@ -46,14 +46,6 @@
 #include "http/routes.hh"
 #include "http/websocket.hh"
 
-#include <cryptopp/sha.h>
-#include <cryptopp/filters.h>
-#include <cryptopp/hex.h>
-#include <cryptopp/base64.h>
-
-#include "core/sleep.hh"
-#include <chrono>
-
 namespace httpd {
 
     class http_server;
@@ -196,9 +188,8 @@ namespace httpd {
                     return read_one();
                 }).then_wrapped([this] (future<> f) {
                     // swallow error
-                    if (f.failed()) {
+                    if (f.failed())
                         _server._read_errors++;
-                    }
                     f.ignore_ready_future();
                     if (_done == detach)
                         return make_ready_future();
@@ -234,7 +225,7 @@ namespace httpd {
                     }
                     f.ignore_ready_future();
                     if (_done == detach)
-                        return _write_buf.flush().then([] { return make_ready_future<>(); });
+                        return make_ready_future<>();
                     return _write_buf.close();
                 });
             }
@@ -247,7 +238,7 @@ namespace httpd {
                             }
                             _resp = std::move(resp);
                             return start_response().then([this] {
-                                if (_done != close)
+                                if (_done == keep_open)
                                     return do_response_loop();
                                 return make_ready_future<>();
                             });
@@ -348,7 +339,6 @@ namespace httpd {
                         req.query_parameters[key] = value;
                     }
                 }
-
             }
 
             /**
@@ -418,8 +408,6 @@ namespace httpd {
             }
 
             future<connection_status> upgrade_websocket(std::unique_ptr<request> req) {
-                constexpr char websocket_uuid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-                constexpr size_t websocket_uuid_len = 36;
                 connection_status done = detach;
 
                 sstring url = set_query_param(*req.get());
@@ -432,24 +420,7 @@ namespace httpd {
                     resp->_headers["Upgrade"] = "websocket";
                     resp->_headers["Connection"] = "Upgrade";
 
-                    CryptoPP::SHA hash;
-                    byte digest[CryptoPP::SHA::DIGESTSIZE];
-                    hash.Update((byte *)it->second.c_str(), std::strlen(it->second.c_str()));
-                    hash.Update((byte *)websocket_uuid, websocket_uuid_len);
-                    hash.Final(digest);
-
-                    std::string base64;
-
-                    CryptoPP::Base64Encoder encoder;
-                    encoder.Put(digest, sizeof(digest));
-                    encoder.MessageEnd();
-                    CryptoPP::word64 size = encoder.MaxRetrievable();
-                    if (size) {
-                        base64.resize(size);
-                        encoder.Get((byte*)base64.data(), base64.size());
-                    }
-
-                    resp->_headers["Sec-WebSocket-Accept"] = sstring(base64.c_str(), base64.size() -1);
+                    resp->_headers["Sec-WebSocket-Accept"] = httpd::connected_websocket::generate_websocket_key(it->second);
                     resp->set_status(reply::status_type::switching_protocols).done();
                     _req = std::move(req);
                 }
