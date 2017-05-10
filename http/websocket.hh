@@ -6,9 +6,8 @@
 #define SEASTARPLAYGROUND_WEBSOCKET_HPP
 
 #include <core/reactor.hh>
-#include <net/socket_defs.hh>
-#include "websocket_fragment.hh"
 #include "request.hh"
+#include "websocket_fragment.hh"
 
 namespace httpd {
 

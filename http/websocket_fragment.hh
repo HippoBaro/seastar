@@ -21,7 +21,7 @@ namespace httpd {
 
     class inbound_websocket_fragment {
     protected:
-
+        //todo make bool members part of a bit field/bitset
         bool _fin = false;
         websocket_opcode _opcode = RESERVED;
         uint64_t _lenght = 0;
@@ -31,7 +31,7 @@ namespace httpd {
         bool _masked = false;
 
     public:
-        bool _is_empty = false;
+        bool _is_empty = true;
         temporary_buffer<char> message;
         bool _is_valid = false;
 
@@ -51,7 +51,7 @@ namespace httpd {
 
         inbound_websocket_fragment(temporary_buffer<char> &raw, uint32_t *index);
 
-        inbound_websocket_fragment() : _is_empty(true), _is_valid(false) {}
+        inbound_websocket_fragment() = default;
 
         inbound_websocket_fragment& operator=(const inbound_websocket_fragment&) = delete;
         inbound_websocket_fragment& operator=(inbound_websocket_fragment &&fragment) {
@@ -83,6 +83,7 @@ namespace httpd {
         }
 
         void reset() {
+            std::cout << "httpd::inbound_websocket_fragment::reset" << std::endl;
             _fin = false;
             _opcode = RESERVED;
             _lenght = 0;

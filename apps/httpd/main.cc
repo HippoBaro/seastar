@@ -26,7 +26,6 @@
 #include "http/file_handler.hh"
 #include "apps/httpd/demo.json.hh"
 #include "http/api_docs.hh"
-#include "core/prometheus.hh"
 
 namespace bpo = boost::program_options;
 
@@ -124,4 +123,3 @@ int main(int ac, char** av) {
         });
     });
 }
-

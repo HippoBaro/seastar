@@ -111,6 +111,7 @@ httpd::connected_websocket::connect_websocket(socket_address sa, socket_address 
 }*/
 
 future<> httpd::websocket_input_stream::read_fragment() {
+    std::cout << "httpd::websocket_input_stream::read_fragment" << std::endl;
     auto parse_fragment = [this] {
         if (_buf.size() - _index > 2)
             _fragment = std::move(inbound_websocket_fragment(_buf, &_index));
@@ -119,6 +120,7 @@ future<> httpd::websocket_input_stream::read_fragment() {
     _fragment.reset();
     if (!_buf || _index >= _buf.size())
         return _stream.read().then([this, parse_fragment](temporary_buffer<char> buf) {
+            std::cout << "read from network" << std::endl;
             _buf = std::move(buf);
             _index = 0;
             parse_fragment();
@@ -128,6 +130,7 @@ future<> httpd::websocket_input_stream::read_fragment() {
 }
 
 future<httpd::websocket_message> httpd::websocket_input_stream::read() {
+    std::cout << "httpd::websocket_input_stream::read" << std::endl;
     _lastmassage.reset();
     return repeat([this] { // gather all fragments and concatenate full message
         return read_fragment().then([this] {

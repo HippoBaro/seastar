@@ -23,8 +23,8 @@
 |                     Payload Data continued ...                |
 +---------------------------------------------------------------+
 */
-httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<char> &raw, uint32_t *i) :
-        inbound_websocket_fragment() {
+httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<char> &raw, uint32_t *i) {
+    std::cout << "httpd::inbound_websocket_fragment::inbound_websocket_fragment" << std::endl;
     auto buf = raw.get_write();
 
     //First header byte
@@ -61,6 +61,7 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
         _is_empty = false;
         *i += _lenght;
     }
+    std::cout << "return httpd::inbound_websocket_fragment::inbound_websocket_fragment" << std::endl;
 }
 
 void httpd::websocket_message::done() {
