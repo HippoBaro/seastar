@@ -83,7 +83,6 @@ namespace httpd {
         }
 
         void reset() {
-            std::cout << "httpd::inbound_websocket_fragment::reset" << std::endl;
             _fin = false;
             _opcode = RESERVED;
             _lenght = 0;
@@ -105,23 +104,27 @@ namespace httpd {
     class websocket_message {
     public:
         websocket_opcode opcode = RESERVED;
-        char _header[10];
         size_t _header_size = 0;
+        char _header[10];
         std::vector<temporary_buffer<char>> _fragments;
         temporary_buffer<char> _concatenated;
 
         websocket_message() noexcept : _is_empty(true) { }
         websocket_message(const websocket_message &) = delete;
         websocket_message(websocket_message &&other) noexcept : opcode(other.opcode),
+                                                                _header_size(other._header_size),
                                                                 _fragments(std::move(other._fragments)),
                                                                 _concatenated(std::move(other._concatenated)),
                                                                 _is_empty(other._is_empty)  {
+            std::memmove(_header, other._header, other._header_size);
         }
 
         void operator=(const websocket_message&) = delete;
         websocket_message & operator= (websocket_message &&other) {
             if (this != &other) {
                 opcode = other.opcode;
+                _header_size = other._header_size;
+                std::memmove(_header, other._header, other._header_size);
                 _fragments = std::move(other._fragments);
                 _concatenated = std::move(other._concatenated);
                 _is_empty = other._is_empty;

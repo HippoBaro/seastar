@@ -4,8 +4,8 @@
 
 #include "websocket_fragment.hh"
 
-/*    0                   1                   2                   3
-0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+/*
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 +-+-+-+-+-------+-+-------------+-------------------------------+
 |F|R|R|R| opcode|M| Payload len |    Extended payload length    |
 |I|S|S|S|  (4)  |A|     (7)     |             (16/64)           |
@@ -23,8 +23,8 @@
 |                     Payload Data continued ...                |
 +---------------------------------------------------------------+
 */
+
 httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<char> &raw, uint32_t *i) {
-    std::cout << "httpd::inbound_websocket_fragment::inbound_websocket_fragment" << std::endl;
     auto buf = raw.get_write();
 
     //First header byte
@@ -48,8 +48,7 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
         *i += sizeof(uint64_t);
     }
 
-    if (_masked && raw.size() >= *i + _lenght + sizeof(uint32_t)) {
-        //message is masked
+    if (_masked && raw.size() >= *i + _lenght + sizeof(uint32_t)) { //message is masked
         uint64_t k = *i;
         *i += sizeof(uint32_t);
         message = std::move(raw.share(*i, _lenght));
@@ -61,8 +60,6 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
         _is_empty = false;
         *i += _lenght;
     }
-    std::cout << "return httpd::inbound_websocket_fragment::inbound_websocket_fragment" << std::endl;
-    std::cout << "lenght " << _lenght << std::endl;
 }
 
 void httpd::websocket_message::done() {
