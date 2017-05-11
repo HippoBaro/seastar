@@ -45,10 +45,10 @@ httpd::connected_websocket::generate_websocket_key(sstring nonce) {
     CryptoPP::word64 size = encoder.MaxRetrievable();
     if (size) {
         base64.resize(size);
-        encoder.Get((byte *) base64.data(), base64.size() -1);
+        encoder.Get((byte *) base64.data(), base64.size());
     }
 
-    return base64;
+    return base64.substr(0, base64.size() - 1); //fixme useless cpy
 }
 
 /*httpd::connected_websocket
@@ -113,16 +113,19 @@ httpd::connected_websocket::connect_websocket(socket_address sa, socket_address 
 future<> httpd::websocket_input_stream::read_fragment() {
     std::cout << "httpd::websocket_input_stream::read_fragment" << std::endl;
     auto parse_fragment = [this] {
+        std::cout << "httpd::websocket_input_stream::read_fragment::parse_fragment" << std::endl;
         if (_buf.size() - _index > 2)
             _fragment = std::move(inbound_websocket_fragment(_buf, &_index));
     };
 
     _fragment.reset();
+    std::cout << "index " << _index << std::endl << "buf.size() " << _buf.size() << std::endl;
     if (!_buf || _index >= _buf.size())
         return _stream.read().then([this, parse_fragment](temporary_buffer<char> buf) {
             std::cout << "read from network" << std::endl;
             _buf = std::move(buf);
             _index = 0;
+            std::cout << "index " << _index << std::endl << "buf.size() " << _buf.size() << std::endl;
             parse_fragment();
         });
     parse_fragment();
@@ -156,15 +159,23 @@ future<httpd::websocket_message> httpd::websocket_input_stream::read() {
  * to buff it and flush everything at once before the next read().
  */
 future<> httpd::websocket_output_stream::write(httpd::websocket_message message) {
+    std::cout << "httpd::websocket_output_stream::write" << std::endl;
     message.done();
+
+    std::cout << "fragment header size : " << message._header_size << std::endl;
+    for (auto &&fragment : message._fragments) {
+        std::cout << "fragment size : " << fragment.size() << std::endl;
+    }
+
     return do_with(std::move(message), [this](httpd::websocket_message &frag) {
         temporary_buffer<char> head((char *) &frag._header, frag._header_size); //FIXME copy memory to avoid mixed writes
-        return this->_stream.write(std::move(head)).then([this, &frag] {
+        return _stream.write(std::move(head)).then([this, &frag] {
             return do_for_each(frag._fragments, [this](temporary_buffer<char> &buff) {
-                return this->_stream.write(std::move(buff));
+                return _stream.write(std::move(buff));
+            }).then([this] {
+                std::cout << "return httpd::websocket_output_stream::write" << std::endl;
+                return _stream.flush();
             });
-        }).then([this] {
-            return this->_stream.flush();
         });
     }).handle_exception([this](std::exception_ptr e) {
         return _stream.close();

@@ -62,6 +62,7 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
         *i += _lenght;
     }
     std::cout << "return httpd::inbound_websocket_fragment::inbound_websocket_fragment" << std::endl;
+    std::cout << "lenght " << _lenght << std::endl;
 }
 
 void httpd::websocket_message::done() {
@@ -72,20 +73,18 @@ void httpd::websocket_message::done() {
     for (auto &fragment : _fragments)
         len += fragment.size();
 
+    _header[0] = header;
     if (len < 125) { //Size fits 7bits
-        _header[0] = header;
         _header[1] = net::hton(static_cast<uint8_t>(len));
         _header_size = 2;
-    } //Size in extended to 16bits
-    else if (len < std::numeric_limits<uint16_t>::max()) {
-        _header[0] = header;
+    }
+    else if (len < std::numeric_limits<uint16_t>::max()) { //Size in extended to 16bits
         _header[1] = 126;
         auto s = net::hton(static_cast<uint16_t>(len));
         std::memcpy(_header + sizeof(uint16_t), &s, sizeof(uint16_t));
         _header_size = 4;
     }
     else { //Size extended to 64bits
-        _header[0] = header;
         _header[1] = 127;
         auto l = net::hton(len);
         std::memcpy(_header + sizeof(uint16_t), &l, sizeof(uint64_t));

@@ -139,8 +139,8 @@ namespace httpd {
                 websocket_message(kind, std::move(message).release()) {
         }
 
-        websocket_message(websocket_opcode kind, temporary_buffer<char> message) noexcept : opcode(kind),
-                                                                                            _is_empty(false) {
+        websocket_message(websocket_opcode kind, temporary_buffer<char> message) noexcept :
+                opcode(kind), _is_empty(false) {
             _fragments.push_back(std::move(message));
         }
 
@@ -157,7 +157,7 @@ namespace httpd {
         void reset() {
             opcode = RESERVED;
             _header_size = 0;
-            _fragments.clear();
+            _fragments = std::vector<temporary_buffer<char>>();
             _concatenated = temporary_buffer<char>();
             _is_empty = true;
         }

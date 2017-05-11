@@ -172,7 +172,9 @@ namespace httpd {
                             //The connection is now detached. It still exist but outside of read and write fibers
                             if (_done == detach) {
                                 sstring url = set_query_param(*_req.get());
-                                return _server._routes.handle_ws(url, std::move(connected_websocket(std::move(_fd), _addr, *_req)));
+                                return _write_buf.flush().then([this, url] {
+                                    _server._routes.handle_ws(url, std::move(connected_websocket(std::move(_fd), _addr, *_req)));
+                                });
                             }
 
                             // FIXME: notify any exceptions in joined?
@@ -226,6 +228,7 @@ namespace httpd {
                     f.ignore_ready_future();
                     if (_done == detach)
                         return make_ready_future<>();
+                    std::cout << "closing" << std::endl;
                     return _write_buf.close();
                 });
             }
@@ -421,6 +424,9 @@ namespace httpd {
                     resp->_headers["Connection"] = "Upgrade";
 
                     resp->_headers["Sec-WebSocket-Accept"] = httpd::connected_websocket::generate_websocket_key(it->second);
+                    std::cout << "response is ";
+                    std::cout.write(resp->_headers["Sec-WebSocket-Accept"].begin(), resp->_headers["Sec-WebSocket-Accept"].size());
+                    std::cout << std::endl;
                     resp->set_status(reply::status_type::switching_protocols).done();
                     _req = std::move(req);
                 }
