@@ -13,8 +13,6 @@ namespace httpd {
 
 class websocket_output_stream final {
     output_stream<char> _stream;
-    temporary_buffer<char> _buf;
-    size_t _size = 0;
 public:
     websocket_output_stream() = default;
 
@@ -61,9 +59,8 @@ private:
 
 public:
     socket_address remote_adress;
-    request _request;
 
-    connected_websocket(connected_socket socket, const socket_address remote_adress, request request) noexcept;
+    connected_websocket(connected_socket socket, const socket_address remote_adress) noexcept;
 
     connected_websocket(connected_websocket &&cs) noexcept;
 
@@ -75,6 +72,14 @@ public:
 
     websocket_output_stream output() {
         return websocket_output_stream(std::move(_socket.output()));
+    }
+
+    void shutdown_output() {
+        _socket.shutdown_output();
+    }
+
+    void shutdown_input() {
+        _socket.shutdown_input();
     }
 
     static sstring generate_websocket_key(sstring nonce);

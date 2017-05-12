@@ -10,14 +10,13 @@
 #include <cryptopp/hex.h>
 #include <cryptopp/base64.h>
 
-httpd::connected_websocket::connected_websocket(connected_socket socket, const socket_address remote_adress,
-                                                request request) noexcept : _socket(std::move(socket)),
-                                                                            remote_adress(remote_adress),
-                                                                            _request(request) {
+httpd::connected_websocket::connected_websocket(connected_socket socket, const socket_address remote_adress) noexcept :
+        _socket(std::move(socket)),
+        remote_adress(remote_adress) {
 }
 
 httpd::connected_websocket::connected_websocket(httpd::connected_websocket &&cs) noexcept : _socket(
-        std::move(cs._socket)), remote_adress(cs.remote_adress), _request(std::move(cs._request)) {
+        std::move(cs._socket)), remote_adress(cs.remote_adress) {
 }
 
 httpd::connected_websocket &httpd::connected_websocket::operator=(httpd::connected_websocket &&cs) noexcept {

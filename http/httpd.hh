@@ -42,6 +42,7 @@
 #include <cctype>
 #include <vector>
 #include <boost/intrusive/list.hpp>
+#include <boost/variant.hpp>
 #include "reply.hh"
 #include "http/routes.hh"
 #include "http/websocket.hh"
@@ -138,7 +139,7 @@ namespace httpd {
             };
 
             http_server& _server;
-            connected_socket _fd;
+            boost::variant<connected_socket, connected_websocket> _fd;
             input_stream<char> _read_buf;
             output_stream<char> _write_buf;
             static constexpr size_t limit = 4096;
@@ -154,8 +155,8 @@ namespace httpd {
 
             connection(http_server& server, connected_socket&& fd,
                        socket_address addr)
-                    : _server(server), _fd(std::move(fd)), _read_buf(_fd.input()), _write_buf(
-                    _fd.output()), _addr(addr) {
+                    : _server(server), _fd(std::move(fd)), _read_buf(boost::get<connected_socket>(_fd).input()),
+                      _write_buf(boost::get<connected_socket>(_fd).output()), _addr(addr) {
                 ++_server._total_connections;
                 ++_server._current_connections;
                 _server._connections.push_back(*this);
@@ -168,22 +169,30 @@ namespace httpd {
             future<> process() {
                 // Launch read and write "threads" simultaneously:
                 return when_all(read(), respond()).then(
-                        [this] (std::tuple<future<>, future<>> joined) {
-                            //The connection is now detached. It still exist but outside of read and write fibers
+                        [this] (std::tuple<future<>, future<>> joined) -> future<> {
+                            //The connection is now detached. It still exists but outside of read and write fibers
                             if (_done == detach) {
                                 sstring url = set_query_param(*_req.get());
-                                return _write_buf.flush().then([this, url] {
-                                    return _server._routes.handle_ws(url, std::move(connected_websocket(std::move(_fd), _addr, *_req)));
+                                return _write_buf.flush().then([this, url] () -> future<> {
+                                    _fd = std::move(connected_websocket(std::move(boost::get<connected_socket>(_fd)), _addr));
+                                    return _server._routes.handle_ws(url, std::move(boost::get<connected_websocket>(_fd)), std::move(_req));
                                 });
                             }
-
                             // FIXME: notify any exceptions in joined?
                             return make_ready_future<>();
                         });
             }
             void shutdown() {
-                _fd.shutdown_input();
-                _fd.shutdown_output();
+
+                if (_fd.which() == 0)
+                {
+                    boost::get<connected_socket>(_fd).shutdown_input();
+                    boost::get<connected_socket>(_fd).shutdown_output();
+                }
+                else {
+                    boost::get<connected_websocket>(_fd).shutdown_input();
+                    boost::get<connected_websocket>(_fd).shutdown_output();
+                }
             }
             future<> read() {
                 return do_until([this] {return _done != keep_open;}, [this] {
@@ -228,7 +237,6 @@ namespace httpd {
                     f.ignore_ready_future();
                     if (_done == detach)
                         return make_ready_future<>();
-                    std::cout << "closing" << std::endl;
                     return _write_buf.close();
                 });
             }
@@ -418,7 +426,7 @@ namespace httpd {
                 resp->set_version(req->_version);
 
                 auto it = req->_headers.find("Sec-WebSocket-Key");
-                if (it != req->_headers.end() && _server._routes.get_ws_handler(url, *req.get())) {
+                if (it != req->_headers.end() && _server._routes.get_ws_handler(url, _req)) {
                     //Success
                     resp->_headers["Upgrade"] = "websocket";
                     resp->_headers["Connection"] = "Upgrade";
