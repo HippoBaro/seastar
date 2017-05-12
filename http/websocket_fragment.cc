@@ -28,37 +28,35 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
     auto buf = raw.get_write();
 
     //First header byte
-    _fin = (bool) (buf[*i] & 128);
+    fin = (bool) (buf[*i] & 128);
     _rsv1 = (bool) (buf[*i] & 64);
     _opcode = static_cast<websocket_opcode>(buf[*i] & 15);
     *i += sizeof(uint8_t);
 
     //Second header byte
     _masked = (bool) (buf[*i] & 128);
-    _lenght = (uint64_t) (buf[*i] & 127);
+    uint64_t length = (uint64_t) (buf[*i] & 127);
 
     *i += sizeof(uint8_t);
 
-    if (_lenght == 126 && raw.size() >= *i + sizeof(uint16_t)) {
-        _lenght = net::ntoh(*reinterpret_cast<uint16_t*>(buf + *i));
+    if (length == 126 && raw.size() >= *i + sizeof(uint16_t)) {
+        length = net::ntoh(*reinterpret_cast<uint16_t*>(buf + *i));
         *i += sizeof(uint16_t);
     }
-    else if (_lenght == 127 && raw.size() >= *i + sizeof(uint64_t)) {
-        _lenght = net::ntoh(*reinterpret_cast<uint64_t*>(buf + *i));
+    else if (length == 127 && raw.size() >= *i + sizeof(uint64_t)) {
+        length = net::ntoh(*reinterpret_cast<uint64_t*>(buf + *i));
         *i += sizeof(uint64_t);
     }
 
-    if (_masked && raw.size() >= *i + _lenght + sizeof(uint32_t)) { //message is masked
+    if (_masked && raw.size() >= *i + length + sizeof(uint32_t)) { //message is masked
         uint64_t k = *i;
         *i += sizeof(uint32_t);
-        message = std::move(raw.share(*i, _lenght));
-        unmask(buf + *i, buf + *i, buf + k, _lenght);
-        _is_empty = false;
-        *i += _lenght;
-    } else if (raw.size() >= *i + _lenght) {
-        message = std::move(raw.share(*i, _lenght));
-        _is_empty = false;
-        *i += _lenght;
+        message = std::move(raw.share(*i, length));
+        unmask(buf + *i, buf + *i, buf + k, length);
+        *i += length;
+    } else if (raw.size() >= *i + length) {
+        message = std::move(raw.share(*i, length));
+        *i += length;
     }
 }
 
@@ -78,13 +76,13 @@ void httpd::websocket_message::done() {
     else if (len < std::numeric_limits<uint16_t>::max()) { //Size in extended to 16bits
         _header[1] = 126;
         auto s = net::hton(static_cast<uint16_t>(len));
-        std::memcpy(_header + sizeof(uint16_t), &s, sizeof(uint16_t));
+        std::memcpy(_header.data() + sizeof(uint16_t), &s, sizeof(uint16_t));
         _header_size = 4;
     }
     else { //Size extended to 64bits
         _header[1] = 127;
         auto l = net::hton(len);
-        std::memcpy(_header + sizeof(uint16_t), &l, sizeof(uint64_t));
+        std::memcpy(_header.data() + sizeof(uint16_t), &l, sizeof(uint64_t));
         _header_size = 10;
     }
 }

@@ -39,8 +39,6 @@ class websocket_input_stream final {
     temporary_buffer<char> _buf;
     uint32_t _index = 0;
 
-private:
-    future<> parse_fragment();
 public:
     websocket_input_stream() = default;
 

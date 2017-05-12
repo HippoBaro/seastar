@@ -131,9 +131,9 @@ future<httpd::websocket_message> httpd::websocket_input_stream::read() {
     _lastmassage.reset();
     return repeat([this] { // gather all fragments and concatenate full message
         return read_fragment().then([this] {
-            if (!_fragment || _fragment._is_empty)
+            if (!_fragment)
                 return stop_iteration::yes;
-            else if (_fragment.fin()) {
+            else if (_fragment.fin) {
                 if (!_lastmassage)
                     _lastmassage = std::move(websocket_message(std::move(_fragment)));
                 else
@@ -155,7 +155,7 @@ future<httpd::websocket_message> httpd::websocket_input_stream::read() {
 future<> httpd::websocket_output_stream::write(httpd::websocket_message message) {
     message.done();
     return do_with(std::move(message), [this](httpd::websocket_message &frag) {
-        temporary_buffer<char> head((char *) &frag._header, frag._header_size); //FIXME copy memory to avoid mixed writes
+        temporary_buffer<char> head((char *) &frag._header, (size_t) frag._header_size); //FIXME copy memory to avoid mixed writes
         return _stream.write(std::move(head)).then([this, &frag] {
             return do_for_each(frag._fragments, [this](temporary_buffer<char> &buff) {
                 return _stream.write(std::move(buff));
