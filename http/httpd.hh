@@ -169,11 +169,11 @@ namespace httpd {
             future<> process() {
                 // Launch read and write "threads" simultaneously:
                 return when_all(read(), respond()).then(
-                        [this] (std::tuple<future<>, future<>> joined) -> future<> {
+                        [this] (std::tuple<future<>, future<>> joined) {
                             //The connection is now detached. It still exists but outside of read and write fibers
                             if (_done == detach) {
                                 sstring url = set_query_param(*_req.get());
-                                return _write_buf.flush().then([this, url] () -> future<> {
+                                return _write_buf.flush().then([this, url] {
                                     _fd = std::move(connected_websocket(std::move(boost::get<connected_socket>(_fd)), _addr));
                                     return _server._routes.handle_ws(url, std::move(boost::get<connected_websocket>(_fd)), std::move(_req));
                                 });

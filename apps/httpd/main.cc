@@ -54,13 +54,15 @@ void set_routes(routes& r) {
         auto input = ws.input();
         auto output = ws.output();
         return do_with(std::move(input), std::move(output), [] (websocket_input_stream &input,
-                                                                websocket_output_stream &output) -> future<> {
+                                                                websocket_output_stream &output) {
             return repeat([&input, &output] {
                 return input.read().then([&output](httpd::websocket_message buf) {
                     if (!buf)
                         return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
                     output.write(std::move(buf));
                     return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::no);
+                }).handle_exception([] (std::exception_ptr ex) {
+                    return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
                 });
             });
         });
@@ -68,16 +70,18 @@ void set_routes(routes& r) {
 
     auto ws_managed_handler = new websocket_handler();
 
-    ws_managed_handler->on_connection_future([] (const std::unique_ptr<request>& req, websocket_output_stream* ws) {
-        temporary_buffer<char> test("Hello from seastar !", 20);
-        return ws->write(websocket_opcode::TEXT, std::move(test));
+    ws_managed_handler->on_connection_future([] (const std::unique_ptr<request>& req,
+                                                 std::function<future<>(httpd::websocket_message)> respond) {
+        return respond(websocket_message(websocket_opcode::TEXT, temporary_buffer<char>("Hello from seastar !", 20)));
     });
 
-    ws_managed_handler->on_message_future([] (const std::unique_ptr<request>& req, websocket_output_stream* ws, httpd::websocket_message message) {
-        return ws->write(std::move(message));
+    ws_managed_handler->on_message_future([] (const std::unique_ptr<request>& req,
+                                              std::function<future<>(httpd::websocket_message)> respond,
+                                              httpd::websocket_message message) {
+        return respond(std::move(message));
     });
 
-    ws_managed_handler->on_disconnection([] (const std::unique_ptr<request>& req, websocket_output_stream* ws) {
+    ws_managed_handler->on_disconnection([] (const std::unique_ptr<request>& req) {
 
     });
 
