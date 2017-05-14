@@ -50,7 +50,7 @@ httpd::connected_websocket::generate_websocket_key(sstring nonce) {
     return base64.substr(0, base64.size() - 1); //fixme useless cpy
 }
 
-/*httpd::connected_websocket
+future<httpd::connected_websocket>
 httpd::connected_websocket::connect_websocket(socket_address sa, socket_address local) {
     return engine().net().connect(sa, local).then([local] (connected_socket fd) {
         input_stream<char> in = std::move(fd.input());
@@ -60,7 +60,7 @@ httpd::connected_websocket::connect_websocket(socket_address sa, socket_address 
                                                                                                 input_stream<char> &in,
                                                                                                 output_stream<char> &out,
                                                                                                 http_request_parser &parser) {
-
+            std::cout << "connecting websocket ..." << std::endl;
             using random_bytes_engine = std::independent_bits_engine<
                     std::default_random_engine, std::numeric_limits<unsigned char>::digits, unsigned char>;
 
@@ -80,34 +80,37 @@ httpd::connected_websocket::connect_websocket(socket_address sa, socket_address 
                 //fixme throw ?
             }
 
-            std::stringstream stream;
-            stream << "GET / HTTP/1.1\r\n"
-                   << "Host: server.example.com\r\n"
-                   << "Upgrade: websocket\r\n"
-                   << "Connection: Upgrade\r\n"
-                   << "Sec-WebSocket-Key: " << nonce << "\r\n"
-                   << "Sec-WebSocket-Protocol: default\r\n"
-                   << "Sec-WebSocket-Version: 13\r\n\r\n";
+            std::cout << "nonce is " << std::experimental::basic_string_view<char>(nonce.begin(), nonce.size()) << std::endl;
 
-            return out.write(stream.str()).then([local, nonce, &out, &in, &parser, fd = std::move(fd)] {
+            std::stringstream stream;
+            stream << "GET / HTTP/1.1\r\nHost: 127.0.0.1:10000\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                   << "Sec-WebSocket-Key: " << nonce.substr(0, nonce.size() - 1) << "\r\nSec-WebSocket-Protocol: default\r\nSec-WebSocket-Version: 13\r\n\r\n";
+
+            auto header = stream.str();
+            std::cout << "request header is" << std::endl << header << std::endl;
+            return out.write(header).then([local, nonce, &out, &in, &parser, &fd] {
                 return out.flush();
-            }).then([local, nonce, &in, &parser, fd = std::move(fd)] {
+            }).then([local, nonce, &in, &parser, &fd] {
+                std::cout << "wrote header on network" << std::endl;
                 parser.init();
-                return in.consume(parser).then([local, nonce, &parser, fd = std::move(fd)](temporary_buffer<char> buf) {
+                return in.consume(parser).then([local, nonce, &parser, &fd] {
+                    std::cout << "reading response " << std::endl;
                     if (parser.eof())
                         throw std::exception(); //FIXME : proper failure
                     std::unique_ptr<httpd::request> req = parser.get_parsed_request();
                     auto it = req->_headers.find("Sec-WebSocket-Accept");
                     if (it != req->_headers.end()
                         && it->second == httpd::connected_websocket::generate_websocket_key(nonce)) {
-                        return std::move(httpd::connected_websocket(nullptr, local, *req)); //FIXME this cannot work as-is
+                        std::cout << "websocket created " << std::endl;
+                        return httpd::connected_websocket(std::move(fd), local);
                     }
+                    std::cout << "nonce doesn't compare" << std::endl;
                     throw std::exception(); //FIXME : proper failure
                 });
             });
         });
     });
-}*/
+}
 
 future<> httpd::websocket_input_stream::read_fragment() {
     auto parse_fragment = [this] {

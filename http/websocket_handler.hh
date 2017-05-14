@@ -57,15 +57,15 @@ public:
                                std::unique_ptr<request>& req) {
 
            auto respond = [&output] (websocket_message message) { return output.write(std::move(message)); };
-            return _on_connection(req, respond).then([this, &ws, &input, &output, &req, respond] {
-                return repeat([this, &input, &output, &req, respond] {
-                    return input.read().then_wrapped([this, &output, &req, respond](future<httpd::websocket_message> f) {
+            return _on_connection(req, respond).then([this, &input, &req, respond] {
+                return repeat([this, &input, &req, respond] {
+                    return input.read().then_wrapped([this, &req, respond](future<httpd::websocket_message> f) {
                         if (f.failed())
                             return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
                         auto buf = std::get<0>(f.get());
                         if (!buf)
                             return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
-                        return on_message_internal(req, respond, buf).then([] (bool close){
+                        return on_message_internal(req, respond, buf).then([] (bool close) {
                             return make_ready_future<bool_class<stop_iteration_tag>>(close);
                         });
                     });

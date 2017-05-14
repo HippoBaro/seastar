@@ -83,7 +83,7 @@ public:
     }
 
     static sstring generate_websocket_key(sstring nonce);
-    //static connected_websocket connect_websocket(socket_address sa, socket_address local = socket_address(::sockaddr_in{AF_INET, INADDR_ANY, {0}}));
+    static future<connected_websocket> connect_websocket(socket_address sa, socket_address local = socket_address(::sockaddr_in{AF_INET, INADDR_ANY, {0}}));
 };
 }
 

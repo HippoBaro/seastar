@@ -378,6 +378,8 @@ namespace httpd {
                 bool conn_keep_alive = false;
                 bool conn_close = false;
 
+                std::cout << "Received http request" << std::endl;
+
                 auto it = req->_headers.find("Connection");
                 if (it != req->_headers.end()) {
                     if (it->second == "Keep-Alive") {
@@ -433,10 +435,14 @@ namespace httpd {
 
                     resp->_headers["Sec-WebSocket-Accept"] = httpd::connected_websocket::generate_websocket_key(it->second);
                     resp->set_status(reply::status_type::switching_protocols).done();
+
+                    std::cout << "Request qualified for websocket upgrade" << std::endl;
+                    std::cout << "Key : " << resp->_headers["Sec-WebSocket-Accept"] << std::endl;
                     _req = std::move(req);
                 }
                 else {
                     //Refused
+                    std::cout << "Request disqualified for websocket upgrade" << std::endl;
                     _done = done = close;
                     resp->set_status(reply::status_type::bad_request);
                 }

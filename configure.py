@@ -433,7 +433,7 @@ deps = {
     'tests/tcp_sctp_client': ['tests/tcp_sctp_client.cc'] + core + libnet,
     'tests/tls_test': ['tests/tls_test.cc'] + core + libnet,
     'tests/fair_queue_test': ['tests/fair_queue_test.cc'] + core,
-    'apps/seawreck/seawreck': ['apps/seawreck/seawreck.cc', 'http/http_response_parser.rl'] + core + libnet,
+    'apps/seawreck/seawreck': ['apps/seawreck/seawreck.cc', 'http/http_response_parser.rl'] + core + libnet + http,
     'apps/fair_queue_tester/fair_queue_tester': ['apps/fair_queue_tester/fair_queue_tester.cc'] + core,
     'apps/iotune/iotune': ['apps/iotune/iotune.cc'] + ['core/resource.cc', 'core/fsqual.cc'],
     'tests/blkdiscard_test': ['tests/blkdiscard_test.cc'] + core,
