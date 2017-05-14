@@ -258,8 +258,7 @@ namespace httpd {
             future<> start_response() {
                 _resp->_headers["Server"] = "Seastar httpd";
                 _resp->_headers["Date"] = _server._date;
-                _resp->_headers["Content-Length"] = to_sstring(
-                        _resp->_content.size());
+                _resp->_headers["Content-Length"] = to_sstring(_resp->_content.size());
                 return _write_buf.write(_resp->_response_line.begin(),
                                         _resp->_response_line.size()).then([this] {
                     return write_reply_headers(_resp->_headers.begin());
@@ -303,7 +302,6 @@ namespace httpd {
              * Convert a hex encoded 2 bytes substring to char
              */
             static char hexstr_to_char(const std::experimental::string_view& in, size_t from) {
-
                 return static_cast<char>(hex_to_byte(in[from]) * 16 + hex_to_byte(in[from + 1]));
             }
 
@@ -378,8 +376,6 @@ namespace httpd {
                 bool conn_keep_alive = false;
                 bool conn_close = false;
 
-                std::cout << "Received http request" << std::endl;
-
                 auto it = req->_headers.find("Connection");
                 if (it != req->_headers.end()) {
                     if (it->second == "Keep-Alive") {
@@ -435,14 +431,10 @@ namespace httpd {
 
                     resp->_headers["Sec-WebSocket-Accept"] = httpd::connected_websocket::generate_websocket_key(it->second);
                     resp->set_status(reply::status_type::switching_protocols).done();
-
-                    std::cout << "Request qualified for websocket upgrade" << std::endl;
-                    std::cout << "Key : " << resp->_headers["Sec-WebSocket-Accept"] << std::endl;
                     _req = std::move(req);
                 }
                 else {
                     //Refused
-                    std::cout << "Request disqualified for websocket upgrade" << std::endl;
                     _done = done = close;
                     resp->set_status(reply::status_type::bad_request);
                 }
