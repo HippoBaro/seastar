@@ -50,20 +50,21 @@ void set_routes(routes& r) {
         return make_ready_future<json::json_return_type>("json-future");
     });
 
-    websocket_function_handler* ws1 = new websocket_function_handler([](const std::unique_ptr<request> req, connected_websocket ws) -> future<> {
+    websocket_function_handler* ws1 = new websocket_function_handler([](const std::unique_ptr<request> req, connected_websocket<SERVER> ws) -> future<> {
         auto input = ws.input();
         auto output = ws.output();
-        return do_with(std::move(input), std::move(output), [] (websocket_input_stream &input,
-                                                                websocket_output_stream &output) {
+        return do_with(std::move(input), std::move(output), [] (websocket_input_stream<SERVER> &input,
+                                                                websocket_output_stream<SERVER> &output) {
             return repeat([&input, &output] {
                 return input.read().then([&output](httpd::websocket_message buf) {
                     if (!buf)
                         return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
-                    output.write(std::move(buf));
-                    return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::no);
-                }).handle_exception([] (std::exception_ptr ex) {
-                    return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
+                    return output.write(std::move(buf)).then([] {
+                        return stop_iteration::no;
+                    });
                 });
+            }).finally([&input, &output] {
+                return when_all(input.close(), output.close());
             });
         });
     });
@@ -72,7 +73,7 @@ void set_routes(routes& r) {
 
     ws_managed_handler->on_connection_future([] (const std::unique_ptr<request>& req,
                                                  std::function<future<>(httpd::websocket_message)> respond) {
-        return respond(websocket_message(websocket_opcode::TEXT, temporary_buffer<char>("Hello from seastar !", 20)));
+        return respond(websocket_message(websocket_opcode::TEXT, "Hello from seastar !"));
     });
 
     ws_managed_handler->on_message_future([] (const std::unique_ptr<request>& req,

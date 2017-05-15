@@ -139,7 +139,7 @@ namespace httpd {
             };
 
             http_server& _server;
-            boost::variant<connected_socket, connected_websocket> _fd;
+            boost::variant<connected_socket, connected_websocket<websocket_type::SERVER>> _fd;
             input_stream<char> _read_buf;
             output_stream<char> _write_buf;
             static constexpr size_t limit = 4096;
@@ -174,8 +174,8 @@ namespace httpd {
                             if (_done == detach) {
                                 sstring url = set_query_param(*_req.get());
                                 return _write_buf.flush().then([this, url] {
-                                    _fd = std::move(connected_websocket(std::move(boost::get<connected_socket>(_fd)), _addr));
-                                    return _server._routes.handle_ws(url, std::move(boost::get<connected_websocket>(_fd)), std::move(_req));
+                                    _fd = std::move(connected_websocket<websocket_type::SERVER>(std::move(boost::get<connected_socket>(_fd)), _addr));
+                                    return _server._routes.handle_ws(url, std::move(boost::get<connected_websocket<websocket_type::SERVER>>(_fd)), std::move(_req));
                                 });
                             }
                             // FIXME: notify any exceptions in joined?
@@ -190,8 +190,8 @@ namespace httpd {
                     boost::get<connected_socket>(_fd).shutdown_output();
                 }
                 else {
-                    boost::get<connected_websocket>(_fd).shutdown_input();
-                    boost::get<connected_websocket>(_fd).shutdown_output();
+                    boost::get<connected_websocket<websocket_type::SERVER>>(_fd).shutdown_input();
+                    boost::get<connected_websocket<websocket_type::SERVER>>(_fd).shutdown_output();
                 }
             }
             future<> read() {
@@ -429,7 +429,7 @@ namespace httpd {
                     resp->_headers["Upgrade"] = "websocket";
                     resp->_headers["Connection"] = "Upgrade";
 
-                    resp->_headers["Sec-WebSocket-Accept"] = httpd::connected_websocket::generate_websocket_key(it->second);
+                    resp->_headers["Sec-WebSocket-Accept"] = httpd::generate_websocket_key(it->second);
                     resp->set_status(reply::status_type::switching_protocols).done();
                     _req = std::move(req);
                 }

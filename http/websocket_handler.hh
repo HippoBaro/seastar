@@ -9,7 +9,7 @@
 
 namespace httpd {
 
-typedef std::function<future<>(std::unique_ptr<request> req, connected_websocket ws)> future_ws_handler_function;
+typedef std::function<future<>(std::unique_ptr<request>, connected_websocket<websocket_type::SERVER>)> future_ws_handler_function;
 
 class websocket_function_handler : public httpd::handler_websocket_base {
 
@@ -18,7 +18,7 @@ public:
             : _f_handle(f_handle) {
     }
 
-    future<> handle(const sstring &path, connected_websocket ws, std::unique_ptr<request> request) override {
+    future<> handle(const sstring &path, connected_websocket<websocket_type::SERVER> ws, std::unique_ptr<request> request) override {
         return _f_handle(std::move(request), std::move(ws));
     }
 
@@ -49,12 +49,12 @@ public:
 
     }
 
-    future<> handle(const sstring &path, connected_websocket ws, std::unique_ptr<request> req) override {
+    future<> handle(const sstring &path, connected_websocket<SERVER> ws, std::unique_ptr<request> req) override {
         auto input = ws.input();
         auto output = ws.output();
         return do_with(std::move(ws), std::move(input), std::move(output), std::move(req),
-                       [this] (connected_websocket &ws, websocket_input_stream &input, websocket_output_stream &output,
-                               std::unique_ptr<request>& req) {
+                       [this] (connected_websocket<SERVER> &ws, websocket_input_stream<SERVER> &input,
+                               websocket_output_stream<SERVER> &output, std::unique_ptr<request>& req) {
 
            auto respond = [&output] (websocket_message message) { return output.write(std::move(message)); };
             return _on_connection(req, respond).then([this, &input, &req, respond] {
@@ -70,7 +70,13 @@ public:
                         });
                     });
                 });
-            }).then([this, &req] { return _on_disconnection(req); });
+            }).then_wrapped([this, &req] (future<> f) {
+                if (!f.failed())
+                    return _on_disconnection(req);
+                return make_ready_future();
+            }).finally([&input, &output] {
+                return when_all(input.close(), output.close());
+            });
         });
     }
 

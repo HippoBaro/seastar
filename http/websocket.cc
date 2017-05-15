@@ -10,23 +10,8 @@
 #include <cryptopp/hex.h>
 #include <cryptopp/base64.h>
 
-httpd::connected_websocket::connected_websocket(connected_socket socket, const socket_address remote_adress) noexcept :
-        _socket(std::move(socket)),
-        remote_adress(remote_adress) {
-}
-
-httpd::connected_websocket::connected_websocket(httpd::connected_websocket &&cs) noexcept : _socket(
-        std::move(cs._socket)), remote_adress(cs.remote_adress) {
-}
-
-httpd::connected_websocket &httpd::connected_websocket::operator=(httpd::connected_websocket &&cs) noexcept {
-    _socket = std::move(cs._socket);
-    remote_adress = std::move(cs.remote_adress);
-    return *this;
-}
-
 sstring
-httpd::connected_websocket::generate_websocket_key(sstring nonce) {
+httpd::generate_websocket_key(sstring nonce) {
     constexpr char websocket_uuid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     constexpr size_t websocket_uuid_len = 36;
 
@@ -50,8 +35,8 @@ httpd::connected_websocket::generate_websocket_key(sstring nonce) {
     return base64.substr(0, base64.size() - 1); //fixme useless cpy
 }
 
-future<httpd::connected_websocket>
-httpd::connected_websocket::connect_websocket(socket_address sa, socket_address local) {
+future<httpd::connected_websocket<httpd::websocket_type::CLIENT>>
+httpd::connect_websocket(socket_address sa, socket_address local) {
     return engine().net().connect(sa, local).then([local] (connected_socket fd) {
         input_stream<char> in = std::move(fd.input());
         output_stream<char> out = std::move(fd.output());
@@ -89,9 +74,9 @@ httpd::connected_websocket::connect_websocket(socket_address sa, socket_address 
                     if (!response)
                         throw std::exception(); //FIXME : proper failure
                     if (std::experimental::string_view(response.begin(), response.size())
-                                .find(httpd::connected_websocket::generate_websocket_key(nonce)) !=
+                                .find(httpd::generate_websocket_key(nonce)) !=
                         std::string::npos) {
-                        return httpd::connected_websocket(std::move(fd), local);
+                        return httpd::connected_websocket<httpd::websocket_type::CLIENT>(std::move(fd), local);
                     } else {
                         fd.shutdown_input();
                         fd.shutdown_output();
@@ -103,7 +88,7 @@ httpd::connected_websocket::connect_websocket(socket_address sa, socket_address 
     });
 }
 
-future<> httpd::websocket_input_stream::read_fragment() {
+future<> httpd::websocket_input_stream_base::read_fragment() {
     auto parse_fragment = [this] {
         if (_buf.size() - _index > 2)
             _fragment = std::move(inbound_websocket_fragment(_buf, &_index));
@@ -120,7 +105,7 @@ future<> httpd::websocket_input_stream::read_fragment() {
     return make_ready_future();
 }
 
-future<httpd::websocket_message> httpd::websocket_input_stream::read() {
+future<httpd::websocket_message> httpd::websocket_input_stream_base::read() {
     _lastmassage.reset();
     return repeat([this] { // gather all fragments and concatenate full message
         return read_fragment().then([this] {
@@ -145,22 +130,23 @@ future<httpd::websocket_message> httpd::websocket_input_stream::read() {
  * When the write is called and (!_buf || _index >= _buf.size()) == false, it would make sense
  * to buff it and flush everything at once before the next read().
  */
-future<> httpd::websocket_output_stream::write(httpd::websocket_message message) {
-    message.done();
+future<> httpd::websocket_output_stream_base::write(httpd::websocket_message message) {
     return do_with(std::move(message), [this](httpd::websocket_message &frag) {
         temporary_buffer<char> head((char *) &frag._header, (size_t) frag._header_size); //FIXME copy memory to avoid mixed writes
-        return _stream.write(std::move(head)).then([this, &frag] {
-            return do_for_each(frag._fragments, [this](temporary_buffer<char> &buff) {
-                return _stream.write(std::move(buff));
+        return _stream.write(std::move(head)).then([this, &frag] () -> future<> {
+            return do_for_each(frag.payload, [this] (temporary_buffer<char> &partial) {
+                return _stream.write(std::move(partial));
             });
         }).then([this] {
             return _stream.flush();
         });
     }).handle_exception([this](std::exception_ptr e) {
-        return _stream.close();
+        //return _stream.close();
     });
 }
 
-future<> httpd::websocket_output_stream::write(websocket_opcode kind, temporary_buffer<char> buf) {
+/*
+future<> httpd::websocket_output_stream_base::write(websocket_opcode kind, temporary_buffer<char> buf) {
     return write(websocket_message(kind, std::move(buf)));
 }
+ */

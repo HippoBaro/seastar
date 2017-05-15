@@ -52,7 +52,7 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
         uint64_t k = *i;
         *i += sizeof(uint32_t);
         message = std::move(raw.share(*i, length));
-        unmask(buf + *i, buf + *i, buf + k, length);
+        un_mask(buf + *i, buf + *i, buf + k, length);
         *i += length;
     } else if (raw.size() >= *i + length) {
         message = std::move(raw.share(*i, length));
@@ -60,34 +60,7 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
     }
 }
 
-void httpd::websocket_message::done() {
-    const auto header = opcode ^ 0x80; //FIXME Dynamically construct header
-
-    assert(_header_size == 0 && "httpd::websocket_message::done() should be called exactly once");
-    uint64_t len = 0;
-    for (auto &fragment : _fragments)
-        len += fragment.size();
-
-    _header[0] = header;
-    if (len < 125) { //Size fits 7bits
-        _header[1] = net::hton(static_cast<uint8_t>(len));
-        _header_size = 2;
-    }
-    else if (len < std::numeric_limits<uint16_t>::max()) { //Size in extended to 16bits
-        _header[1] = 126;
-        auto s = net::hton(static_cast<uint16_t>(len));
-        std::memcpy(_header.data() + sizeof(uint16_t), &s, sizeof(uint16_t));
-        _header_size = 4;
-    }
-    else { //Size extended to 64bits
-        _header[1] = 127;
-        auto l = net::hton(len);
-        std::memcpy(_header.data() + sizeof(uint16_t), &l, sizeof(uint64_t));
-        _header_size = 10;
-    }
-}
-
-temporary_buffer<char> & httpd::websocket_message::concat() {
+/*temporary_buffer<char> & httpd::websocket_message::concat() {
     if (!_concatenated.empty())
         return _concatenated;
 
@@ -98,13 +71,14 @@ temporary_buffer<char> & httpd::websocket_message::concat() {
     length = 0;
     for (auto& n : _fragments) {
         std::memcpy(ret.share(length, n.size()).get_write(), n.get(), n.size());
-        length = n.size();
+        length += n.size();
     }
-    return _concatenated = std::move(ret);
-}
+    concatenated = true;
+    return (_concatenated = std::move(ret));
+}*/
 
 
-inline void httpd::inbound_websocket_fragment::unmask(char *dst, const char *src, const char *mask, uint64_t length) {
+void httpd::un_mask(char *dst, const char *src, const char *mask, uint64_t length) {
     for (uint64_t j = 0; j < length; ++j)
         dst[j] = src[j] ^ mask[j % 4];
 }
