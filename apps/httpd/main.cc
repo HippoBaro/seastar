@@ -50,13 +50,13 @@ void set_routes(routes& r) {
         return make_ready_future<json::json_return_type>("json-future");
     });
 
-    websocket_function_handler* ws1 = new websocket_function_handler([](const std::unique_ptr<request> req, connected_websocket<SERVER> ws) -> future<> {
+    auto ws1 = new websocket_function_handler<SERVER>([](const std::unique_ptr<request> req, connected_websocket<SERVER> ws) -> future<> {
         auto input = ws.input();
         auto output = ws.output();
         return do_with(std::move(input), std::move(output), [] (websocket_input_stream<SERVER> &input,
                                                                 websocket_output_stream<SERVER> &output) {
             return repeat([&input, &output] {
-                return input.read().then([&output](httpd::websocket_message buf) {
+                return input.read().then([&output](httpd::websocket_message<SERVER> buf) {
                     if (!buf)
                         return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
                     return output.write(std::move(buf)).then([] {
@@ -69,16 +69,16 @@ void set_routes(routes& r) {
         });
     });
 
-    auto ws_managed_handler = new websocket_handler();
+    auto ws_managed_handler = new websocket_handler<SERVER>();
 
     ws_managed_handler->on_connection_future([] (const std::unique_ptr<request>& req,
-                                                 std::function<future<>(httpd::websocket_message)> respond) {
-        return respond(websocket_message(websocket_opcode::TEXT, "Hello from seastar !"));
+                                                 std::function<future<>(httpd::websocket_message<SERVER>)> respond) {
+        return respond(websocket_message<SERVER>(websocket_opcode::TEXT, "Hello from seastar !"));
     });
 
     ws_managed_handler->on_message_future([] (const std::unique_ptr<request>& req,
-                                              std::function<future<>(httpd::websocket_message)> respond,
-                                              httpd::websocket_message message) {
+                                              std::function<future<>(httpd::websocket_message<SERVER>)> respond,
+                                              httpd::websocket_message<SERVER> message) {
         return respond(std::move(message));
     });
 

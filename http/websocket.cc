@@ -88,7 +88,7 @@ httpd::connect_websocket(socket_address sa, socket_address local) {
     });
 }
 
-future<> httpd::websocket_input_stream_base::read_fragment() {
+/*future<> httpd::websocket_input_stream_base::read_fragment() {
     auto parse_fragment = [this] {
         if (_buf.size() - _index > 2)
             _fragment = std::move(inbound_websocket_fragment(_buf, &_index));
@@ -113,7 +113,7 @@ future<httpd::websocket_message> httpd::websocket_input_stream_base::read() {
                 return stop_iteration::yes;
             else if (_fragment.fin) {
                 if (!_lastmassage)
-                    _lastmassage = std::move(websocket_message(std::move(_fragment)));
+                    _lastmassage = websocket_message(std::move(_fragment));
                 else
                     _lastmassage.append(std::move(_fragment));
                 return stop_iteration::yes;
@@ -124,14 +124,14 @@ future<httpd::websocket_message> httpd::websocket_input_stream_base::read() {
     }).then([this] {
         return std::move(_lastmassage);
     });
-}
+}*/
 
 /*
  * When the write is called and (!_buf || _index >= _buf.size()) == false, it would make sense
  * to buff it and flush everything at once before the next read().
  */
-future<> httpd::websocket_output_stream_base::write(httpd::websocket_message message) {
-    return do_with(std::move(message), [this](httpd::websocket_message &frag) {
+future<> httpd::websocket_output_stream_base::write(httpd::websocket_message_base message) {
+    return do_with(std::move(message), [this](httpd::websocket_message_base &frag) {
         temporary_buffer<char> head((char *) &frag._header, (size_t) frag._header_size); //FIXME copy memory to avoid mixed writes
         return _stream.write(std::move(head)).then([this, &frag] () -> future<> {
             return do_for_each(frag.payload, [this] (temporary_buffer<char> &partial) {

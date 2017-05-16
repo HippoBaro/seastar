@@ -24,7 +24,7 @@
 +---------------------------------------------------------------+
 */
 
-httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<char> &raw, uint32_t *i) {
+void httpd::inbound_websocket_fragment_base::parse(temporary_buffer<char> &raw, uint32_t *i) {
     auto buf = raw.get_write();
 
     //First header byte
@@ -35,20 +35,20 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
 
     //Second header byte
     _masked = (bool) (buf[*i] & 128);
-    uint64_t length = (uint64_t) (buf[*i] & 127);
+    _lenght = (uint64_t) (buf[*i] & 127);
 
     *i += sizeof(uint8_t);
 
-    if (length == 126 && raw.size() >= *i + sizeof(uint16_t)) {
-        length = net::ntoh(*reinterpret_cast<uint16_t*>(buf + *i));
+    if (_lenght == 126 && raw.size() >= *i + sizeof(uint16_t)) {
+        _lenght = net::ntoh(*reinterpret_cast<uint16_t*>(buf + *i));
         *i += sizeof(uint16_t);
     }
-    else if (length == 127 && raw.size() >= *i + sizeof(uint64_t)) {
-        length = net::ntoh(*reinterpret_cast<uint64_t*>(buf + *i));
+    else if (_lenght == 127 && raw.size() >= *i + sizeof(uint64_t)) {
+        _lenght = net::ntoh(*reinterpret_cast<uint64_t*>(buf + *i));
         *i += sizeof(uint64_t);
     }
 
-    if (_masked && raw.size() >= *i + length + sizeof(uint32_t)) { //message is masked
+/*    if (_masked && raw.size() >= *i + length + sizeof(uint32_t)) { //message is masked
         uint64_t k = *i;
         *i += sizeof(uint32_t);
         message = std::move(raw.share(*i, length));
@@ -57,7 +57,7 @@ httpd::inbound_websocket_fragment::inbound_websocket_fragment(temporary_buffer<c
     } else if (raw.size() >= *i + length) {
         message = std::move(raw.share(*i, length));
         *i += length;
-    }
+    }*/
 }
 
 /*temporary_buffer<char> & httpd::websocket_message::concat() {
