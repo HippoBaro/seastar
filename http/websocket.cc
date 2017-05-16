@@ -64,12 +64,14 @@ httpd::connect_websocket(socket_address sa, socket_address local) {
             nonce = nonce.substr(0, nonce.size() - 1);
 
             std::stringstream stream;
+            //FIXME construct correct request header
             stream << "GET / HTTP/1.1\r\nHost: 127.0.0.1:10000\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
                    << "Sec-WebSocket-Key: " << nonce << "\r\nSec-WebSocket-Protocol: default\r\nSec-WebSocket-Version: 13\r\n\r\n";
 
             return out.write(stream.str()).then([local, nonce, &out, &in, &fd] {
                 return out.flush();
             }).then([local, nonce, &in, &fd] {
+                //FIXME extend http request parser to support header only payload (no HTTP verb)
                 return in.read().then([local, nonce, &fd] (temporary_buffer<char> response) {
                     if (!response)
                         throw std::exception(); //FIXME : proper failure
