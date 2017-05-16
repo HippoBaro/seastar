@@ -66,7 +66,9 @@ public:
                         if (!buf)
                             return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
                         return on_message_internal(req, respond, buf).then([] (bool close) {
-                            return make_ready_future<bool_class<stop_iteration_tag>>(close);
+                            if (close)
+                                return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
+                            return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::no);
                         });
                     });
                 });
