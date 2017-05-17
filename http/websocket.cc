@@ -4,7 +4,6 @@
 
 #include "websocket.hh"
 #include "http/request_parser.hh"
-#include <random>
 #include <cryptopp/sha.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/hex.h>
@@ -76,8 +75,7 @@ httpd::connect_websocket(socket_address sa, socket_address local) {
                     if (!response)
                         throw std::exception(); //FIXME : proper failure
                     if (std::experimental::string_view(response.begin(), response.size())
-                                .find(httpd::generate_websocket_key(nonce)) !=
-                        std::string::npos) {
+                                .find(httpd::generate_websocket_key(nonce)) != std::string::npos) {
                         return httpd::connected_websocket<httpd::websocket_type::CLIENT>(std::move(fd), local);
                     } else {
                         fd.shutdown_input();
@@ -90,44 +88,6 @@ httpd::connect_websocket(socket_address sa, socket_address local) {
     });
 }
 
-/*future<> httpd::websocket_input_stream_base::read_fragment() {
-    auto parse_fragment = [this] {
-        if (_buf.size() - _index > 2)
-            _fragment = std::move(inbound_websocket_fragment(_buf, &_index));
-    };
-
-    _fragment.reset();
-    if (!_buf || _index >= _buf.size())
-        return _stream.read().then([this, parse_fragment](temporary_buffer<char> buf) {
-            _buf = std::move(buf);
-            _index = 0;
-            parse_fragment();
-        });
-    parse_fragment();
-    return make_ready_future();
-}
-
-future<httpd::websocket_message> httpd::websocket_input_stream_base::read() {
-    _lastmassage.reset();
-    return repeat([this] { // gather all fragments and concatenate full message
-        return read_fragment().then([this] {
-            if (!_fragment)
-                return stop_iteration::yes;
-            else if (_fragment.fin) {
-                if (!_lastmassage)
-                    _lastmassage = websocket_message(std::move(_fragment));
-                else
-                    _lastmassage.append(std::move(_fragment));
-                return stop_iteration::yes;
-            } else if (_fragment.opcode() == CONTINUATION)
-                _lastmassage.append(std::move(_fragment));
-            return stop_iteration::no;
-        });
-    }).then([this] {
-        return std::move(_lastmassage);
-    });
-}*/
-
 /*
  * When the write is called and (!_buf || _index >= _buf.size()) == false, it would make sense
  * to buff it and flush everything at once before the next read().
@@ -136,19 +96,11 @@ future<> httpd::websocket_output_stream_base::write(httpd::websocket_message_bas
     return do_with(std::move(message), [this](httpd::websocket_message_base &frag) {
         temporary_buffer<char> head((char *) &frag._header, (size_t) frag._header_size); //FIXME copy memory to avoid mixed writes
         return _stream.write(std::move(head)).then([this, &frag] () -> future<> {
-            return do_for_each(frag.payload, [this] (temporary_buffer<char> &partial) {
+            return do_for_each(frag.fragments, [this] (temporary_buffer<char> &partial) {
                 return _stream.write(std::move(partial));
             });
         }).then([this] {
             return _stream.flush();
         });
-    }).handle_exception([this](std::exception_ptr e) {
-        //return _stream.close();
     });
 }
-
-/*
-future<> httpd::websocket_output_stream_base::write(websocket_opcode kind, temporary_buffer<char> buf) {
-    return write(websocket_message(kind, std::move(buf)));
-}
- */
