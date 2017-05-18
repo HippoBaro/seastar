@@ -361,7 +361,8 @@ http = ['http/transformers.cc',
         'http/request_parser.rl',
         'http/api_docs.cc',
         'http/websocket.cc',
-        'http/websocket_fragment.cc'
+        'http/websocket_fragment.cc',
+        'http/websocket_message.cc'
         ]
 
 boost_test_lib = [

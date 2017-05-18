@@ -8,6 +8,7 @@
 #include <core/reactor.hh>
 #include "request.hh"
 #include "websocket_fragment.hh"
+#include "websocket_message.hh"
 
 namespace httpd {
 
