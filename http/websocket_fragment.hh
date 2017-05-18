@@ -51,7 +51,7 @@ namespace httpd {
                                                                                   _rsv3(fragment._rsv3),
                                                                                   _rsv1(fragment._rsv1),
                                                                                   _masked(fragment._masked),
-                                                                                     fin(fragment.fin),
+                                                                                  fin(fragment.fin),
                                                                                   message(std::move(fragment.message)) {
         }
 
@@ -114,7 +114,7 @@ namespace httpd {
                 *index += sizeof(uint32_t);
                 message = std::move(raw.share(*index, _length));
                 un_mask(raw.get_write() + *index, raw.get_write() + *index, raw.get_write() + k, _length);
-                if (_opcode == websocket_opcode::TEXT && utf8_check((const unsigned char *)raw.get(), raw.size())) {
+                if (_opcode == websocket_opcode::TEXT && !utf8_check((const unsigned char *)raw.get(), raw.size())) {
                     throw std::exception();
                 }
                 *index += _length;
