@@ -24,7 +24,7 @@
 +---------------------------------------------------------------+
 */
 
-httpd::inbound_websocket_fragment_base::inbound_websocket_fragment_base(temporary_buffer<char>& raw, uint32_t* i)
+httpd::inbound_websocket_fragment_base::inbound_websocket_fragment_base(temporary_buffer<char>& raw, uint32_t* i) noexcept
 {
   auto buf = raw.get_write();
 

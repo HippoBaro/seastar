@@ -38,29 +38,28 @@ namespace httpd {
         bool _rsv1 = false;
         uint64_t _length = 0;
 
-        //virtual void parse(temporary_buffer<char>&, uint32_t*);
-
     public:
         uint32_t mask_key = 0;
         bool fin = false;
         temporary_buffer<char> message;
 
-        inbound_websocket_fragment_base(temporary_buffer<char> &raw, uint32_t *i);
+        inbound_websocket_fragment_base(temporary_buffer<char> &raw, uint32_t *i) noexcept ;
 
         inbound_websocket_fragment_base(const inbound_websocket_fragment_base &) = delete;
-        inbound_websocket_fragment_base(inbound_websocket_fragment_base &&fragment) noexcept : _opcode(fragment._opcode),
-                                                                                  _rsv2(fragment._rsv2),
-                                                                                  _rsv3(fragment._rsv3),
-                                                                                  _rsv1(fragment._rsv1),
-                                                                                    mask_key(fragment.mask_key),
-                                                                                  fin(fragment.fin),
-                                                      message(std::move(fragment.message)) {
+        inbound_websocket_fragment_base(inbound_websocket_fragment_base &&fragment) noexcept :
+                _opcode(fragment._opcode),
+                _rsv2(fragment._rsv2),
+                _rsv3(fragment._rsv3),
+                _rsv1(fragment._rsv1),
+                mask_key(fragment.mask_key),
+                fin(fragment.fin),
+                message(std::move(fragment.message)) {
         }
 
         inbound_websocket_fragment_base() = default;
 
         inbound_websocket_fragment_base& operator=(const inbound_websocket_fragment_base&) = delete;
-        inbound_websocket_fragment_base& operator=(inbound_websocket_fragment_base &&fragment) {
+        inbound_websocket_fragment_base& operator=(inbound_websocket_fragment_base &&fragment) noexcept {
             if (*this != fragment) {
                 _opcode = fragment._opcode;
                 _rsv2 = fragment._rsv2;
@@ -94,29 +93,34 @@ namespace httpd {
 
     template<>
     class inbound_websocket_fragment<CLIENT> final : public inbound_websocket_fragment_base {
-    using inbound_websocket_fragment_base::inbound_websocket_fragment_base;
+        using inbound_websocket_fragment_base::inbound_websocket_fragment_base;
     public:
-      inbound_websocket_fragment<CLIENT>(temporary_buffer<char>& raw, uint32_t* i) : inbound_websocket_fragment_base(raw, i) {
-        if (raw.size() >= *i + _length) {
-          message = std::move(raw.share(*i, _length));
-          *i += _length;
+        inbound_websocket_fragment() noexcept {}
+
+        inbound_websocket_fragment(temporary_buffer<char> &raw, uint32_t *i) noexcept:
+                inbound_websocket_fragment_base(raw, i) {
+            if (raw.size() >= *i + _length) {
+                message = std::move(raw.share(*i, _length));
+                *i += _length;
+            }
         }
-      }
     };
 
     template<>
     class inbound_websocket_fragment<SERVER> final : public inbound_websocket_fragment_base {
-    using inbound_websocket_fragment_base::inbound_websocket_fragment_base;
+        using inbound_websocket_fragment_base::inbound_websocket_fragment_base;
     public:
-      inbound_websocket_fragment<SERVER>(temporary_buffer<char>& raw, uint32_t* i) : inbound_websocket_fragment_base
-        (raw, i) {
-        if (raw.size() >= *i + _length + sizeof(uint32_t)) { //message is masked
-          mask_key = *reinterpret_cast<uint32_t *>(raw.get_write() + *i);
-          *i += sizeof(uint32_t);
-          message = std::move(raw.share(*i, _length));
-          *i += _length;
+        inbound_websocket_fragment() {}
+
+        inbound_websocket_fragment(temporary_buffer<char> &raw, uint32_t *i) noexcept:
+                inbound_websocket_fragment_base(raw, i) {
+            if (raw.size() >= *i + _length + sizeof(uint32_t)) { //message is masked
+                mask_key = *reinterpret_cast<uint32_t *>(raw.get_write()  + *i);
+                *i += sizeof(uint32_t);
+                message = std::move(raw.share(*i, _length));
+                *i += _length;
+            }
         }
-      }
     };
 }
 
