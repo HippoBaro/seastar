@@ -36,15 +36,15 @@ void httpd::inbound_websocket_fragment_base::parse(temporary_buffer<char> &raw, 
 
     //Second header byte
     _masked = (bool) (buf[*i] & 128);
-    _lenght = (uint64_t) (buf[*i] & 127);
+    _length = (uint64_t) (buf[*i] & 127);
 
     *i += sizeof(uint8_t);
 
-    if (_lenght == 126 && raw.size() >= *i + sizeof(uint16_t)) {
-        _lenght = net::ntoh(*reinterpret_cast<uint16_t *>(buf + *i));
+    if (_length == 126 && raw.size() >= *i + sizeof(uint16_t)) {
+        _length = net::ntoh(*reinterpret_cast<uint16_t *>(buf + *i));
         *i += sizeof(uint16_t);
-    } else if (_lenght == 127 && raw.size() >= *i + sizeof(uint64_t)) {
-        _lenght = net::ntoh(*reinterpret_cast<uint64_t *>(buf + *i));
+    } else if (_length == 127 && raw.size() >= *i + sizeof(uint64_t)) {
+        _length = net::ntoh(*reinterpret_cast<uint64_t *>(buf + *i));
         *i += sizeof(uint64_t);
     }
 }
@@ -67,7 +67,7 @@ void httpd::un_mask(char *dst, const char *src, const char *mask, uint64_t lengt
 
 // Extracted from https://www.cl.cam.ac.uk/~mgk25/ucs/utf8_check.c
 // Licence : https://www.cl.cam.ac.uk/~mgk25/short-license.html
-bool utf8_check(const unsigned char *s, size_t length)
+bool httpd::utf8_check(const unsigned char *s, size_t length)
 {
     for (const unsigned char *e = s + length; s != e; ) {
         if (s + 4 <= e && ((*(uint32_t *) s) & 0x80808080) == 0) {
@@ -104,7 +104,7 @@ bool utf8_check(const unsigned char *s, size_t length)
 }
 
 uint8_t httpd::websocket_message_base::write_payload_size() {
-    assert(_header_size == 0 && "httpd::websocket_message::done() should be called exactly once");
+    assert(_header_size == 0 && "httpd::websocket_message_base::done() should be called exactly once");
 
     uint8_t advertised_size = 0;
     const auto header = opcode ^ 0x80; //FIXME Dynamically construct header

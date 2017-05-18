@@ -37,7 +37,7 @@ namespace httpd {
         bool _rsv3 = false;
         bool _rsv1 = false;
         bool _masked = false;
-        uint64_t _lenght = 0;
+        uint64_t _length = 0;
 
         virtual void parse(temporary_buffer<char>&, uint32_t*);
 
@@ -96,9 +96,9 @@ namespace httpd {
     public:
         void parse(temporary_buffer<char> &raw, uint32_t *index) override final {
             inbound_websocket_fragment_base::parse(raw, index);
-            if (raw.size() >= *index + _lenght) {
-                message = std::move(raw.share(*index, _lenght));
-                *index += _lenght;
+            if (raw.size() >= *index + _length) {
+                message = std::move(raw.share(*index, _length));
+                *index += _length;
             }
         }
     };
@@ -109,15 +109,15 @@ namespace httpd {
     public:
         void parse(temporary_buffer<char> &raw, uint32_t *index) override final {
             inbound_websocket_fragment_base::parse(raw, index);
-            if (_masked && raw.size() >= *index + _lenght + sizeof(uint32_t)) { //message is masked
+            if (_masked && raw.size() >= *index + _length + sizeof(uint32_t)) { //message is masked
                 uint64_t k = *index;
                 *index += sizeof(uint32_t);
-                message = std::move(raw.share(*index, _lenght));
-                un_mask(raw.get_write() + *index, raw.get_write() + *index, raw.get_write() + k, _lenght);
+                message = std::move(raw.share(*index, _length));
+                un_mask(raw.get_write() + *index, raw.get_write() + *index, raw.get_write() + k, _length);
                 if (_opcode == websocket_opcode::TEXT && utf8_check((const unsigned char *)raw.get(), raw.size())) {
                     throw std::exception();
                 }
-                *index += _lenght;
+                *index += _length;
             }
         }
     };
@@ -211,14 +211,21 @@ namespace httpd {
             if (fragments.size() == 1) {
                 return fragments.front();
             }
-            uint64_t lenght = std::accumulate(fragments.front(), fragments.back(), (uint64_t) 0,
-                                              [](uint64_t a, temporary_buffer<char> &b) { return a + b.size(); });
+
+
+            uint64_t lenght = 0;
+            for (auto&& fragment : fragments) {
+                lenght += fragment.size();
+            }
+
+            /*uint64_t lenght = std::accumulate(fragments.front(), fragments.back(), (uint64_t) 0,
+                                              [](uint64_t a, temporary_buffer<char> &&b) { return a + b.size(); });*/
 
             _payload = temporary_buffer<char>(lenght);
 
             uint64_t k = 0;
             char* buf = _payload.get_write();
-            for (int j = 0; j < fragments.size(); ++j) {
+            for (unsigned int j = 0; j < fragments.size(); ++j) {
                 std::memmove(buf + k, fragments[j].get(), fragments.size());
                 k += fragments.size();
             }
