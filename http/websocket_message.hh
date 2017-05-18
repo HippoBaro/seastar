@@ -9,14 +9,18 @@ public:
   websocket_opcode opcode = RESERVED;
   int _header_size = 0;
   std::array<char, 14> _header;
-  std::vector<temporary_buffer<char>> fragments;
+  temporary_buffer<char> payload;
+
+  websocket_message_base(websocket_opcode opcode) : opcode(opcode) {};
+  websocket_message_base(websocket_opcode opcode, sstring message) : opcode(opcode),
+                                                  payload(std::move(std::move(message).release())) {};
 
   websocket_message_base() = default;
   websocket_message_base(const websocket_message_base &) = delete;
   websocket_message_base(websocket_message_base &&other) noexcept : opcode(other.opcode),
     _header_size(other._header_size),
     _header(other._header),
-    fragments(std::move(other.fragments)) {
+    payload(std::move(other.payload)) {
   }
 
   void operator=(const websocket_message_base&) = delete;
@@ -25,45 +29,50 @@ public:
       opcode = other.opcode;
       _header_size = other._header_size;
       _header = other._header;
-      fragments = std::move(other.fragments);
+      payload = std::move(other.payload);
     }
     return *this;
   }
 
-  explicit operator bool() const { return !fragments.empty(); }
-
-  websocket_message_base(inbound_websocket_fragment_base fragment) noexcept :
-    websocket_message_base(fragment.opcode(), std::move(fragment.message)) {
-  }
-
-  websocket_message_base(websocket_opcode kind, sstring message) noexcept :
-    websocket_message_base(kind, std::move(message).release()) {
-  }
-
-  websocket_message_base(websocket_opcode kind, temporary_buffer<char> message) noexcept : opcode(kind) {
-    fragments.push_back(std::move(message));
-  }
-
-  void append(inbound_websocket_fragment_base fragment) {
-    fragments.emplace_back(fragment.message.begin(), fragment.message.size());
-  }
+  explicit operator bool() const { return !payload.empty(); }
 
   void reset() {
     opcode = RESERVED;
     _header_size = 0;
-    fragments.clear();
+    payload = temporary_buffer<char>();
   }
 
   uint8_t write_payload_size();
 };
 
 template<websocket_type type>
-class websocket_message : public websocket_message_base {};
+class websocket_message final : public websocket_message_base {};
 
 template<>
 class websocket_message<CLIENT> final : public websocket_message_base {
-  using websocket_message_base::websocket_message_base;
 public:
+  using websocket_message_base::websocket_message_base;
+  websocket_message<CLIENT>(std::vector<inbound_websocket_fragment<CLIENT>>& fragments) : websocket_message_base
+    (fragments.back().opcode())  {
+    if (fragments.size() == 1) {
+      payload = std::move(fragments.back().message);
+    }
+
+    uint64_t lenght = 0;
+    for (auto&& fragment : fragments) {
+      lenght += fragment.message.size();
+    }
+
+    payload = temporary_buffer<char>(lenght);
+
+    uint64_t k = 0;
+    char* buf = payload.get_write();
+    for (unsigned int j = 0; j < fragments.size(); ++j) {
+      std::memmove(buf + k, fragments[j].message.get(), fragments.size());
+      k += fragments.size();
+    }
+  }
+
   void done() {
     _header[1] = (char) (128 | write_payload_size());
     //FIXME Constructing an independent_bits_engine is expensive. static thread_local ?
@@ -71,44 +80,45 @@ public:
     uint32_t mask = rbe();
     std::memcpy(_header.data() + _header_size, &mask, sizeof(uint32_t));
     _header_size += sizeof(uint32_t);
-    //fixme mask
-
-    if (fragments.empty())
-      return;
-    un_mask(fragments.front().get_write(), fragments.front().get(), (char *) (&mask), fragments.front().size());
+    un_mask(payload.get_write(), payload.get(), (char *) (&mask), payload.size());
   }
 };
 
 template<>
 class websocket_message<SERVER> final : public websocket_message_base {
-private:
-  temporary_buffer<char> _payload;
 public:
   using websocket_message_base::websocket_message_base;
+  websocket_message<SERVER>(std::vector<inbound_websocket_fragment<SERVER>>& fragments) : websocket_message_base
+    (fragments.back().opcode())
+  {
+    if (fragments.size() == 1)
+    {
+      payload = temporary_buffer<char>(fragments.back().message.size());
+      un_mask(payload.get_write(), fragments.back().message.get(), (char*) (&fragments.back().mask_key), payload.size());
+    }
+
+    uint64_t length = 0;
+    for (auto&& fragment : fragments) {
+      length += fragment.message.size();
+    }
+
+    payload = temporary_buffer<char>(length);
+
+    uint64_t k = 0;
+    char* buf = payload.get_write();
+    for (unsigned int j = 0; j < fragments.size(); ++j)
+    {
+      un_mask(buf + k, fragments[j].message.get(), (char*) (&fragments[j].mask_key), fragments.size());
+      k += fragments.size();
+    }
+
+    if (opcode == websocket_opcode::TEXT && !utf8_check((const unsigned char *)payload.get(), length)) {
+      throw std::exception();
+    }
+  }
   void done() {
     _header[1] = write_payload_size();
   };
-
-  temporary_buffer<char>& concat() {
-    if (fragments.size() == 1) {
-      return fragments.front();
-    }
-
-    uint64_t lenght = 0;
-    for (auto&& fragment : fragments) {
-      lenght += fragment.size();
-    }
-
-    _payload = temporary_buffer<char>(lenght);
-
-    uint64_t k = 0;
-    char* buf = _payload.get_write();
-    for (unsigned int j = 0; j < fragments.size(); ++j) {
-      std::memmove(buf + k, fragments[j].get(), fragments.size());
-      k += fragments.size();
-    }
-    return _payload;
-  }
 };
 }
 

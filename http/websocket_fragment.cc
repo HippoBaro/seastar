@@ -24,29 +24,29 @@
 +---------------------------------------------------------------+
 */
 
-void httpd::inbound_websocket_fragment_base::parse(temporary_buffer<char> &raw, uint32_t *i) {
-    auto buf = raw.get_write();
+httpd::inbound_websocket_fragment_base::inbound_websocket_fragment_base(temporary_buffer<char>& raw, uint32_t* i)
+{
+  auto buf = raw.get_write();
 
-    //First header byte
-    fin = (bool) (buf[*i] & 128);
-    _rsv1 = (bool) (buf[*i] & 64);
-    _opcode = static_cast<websocket_opcode>(buf[*i] & 15);
+  //First header byte
+  fin = (bool) (buf[*i] & 128);
+  _rsv1 = (bool) (buf[*i] & 64);
+  _opcode = static_cast<websocket_opcode>(buf[*i] & 15);
 
-    *i += sizeof(uint8_t);
+  *i += sizeof(uint8_t);
 
-    //Second header byte
-    _masked = (bool) (buf[*i] & 128);
-    _length = (uint64_t) (buf[*i] & 127);
+  //Second header byte
+  _length = (uint64_t) (buf[*i] & 127);
 
-    *i += sizeof(uint8_t);
+  *i += sizeof(uint8_t);
 
-    if (_length == 126 && raw.size() >= *i + sizeof(uint16_t)) {
-        _length = net::ntoh(*reinterpret_cast<uint16_t *>(buf + *i));
-        *i += sizeof(uint16_t);
-    } else if (_length == 127 && raw.size() >= *i + sizeof(uint64_t)) {
-        _length = net::ntoh(*reinterpret_cast<uint64_t *>(buf + *i));
-        *i += sizeof(uint64_t);
-    }
+  if (_length == 126 && raw.size() >= *i + sizeof(uint16_t)) {
+    _length = net::ntoh(*reinterpret_cast<uint16_t *>(buf + *i));
+    *i += sizeof(uint16_t);
+  } else if (_length == 127 && raw.size() >= *i + sizeof(uint64_t)) {
+    _length = net::ntoh(*reinterpret_cast<uint64_t *>(buf + *i));
+    *i += sizeof(uint64_t);
+  }
 }
 
 void httpd::un_mask(char *dst, const char *src, const char *mask, uint64_t length) {
