@@ -55,7 +55,7 @@ public:
                        [this] (connected_websocket<SERVER> &ws, websocket_input_stream<SERVER> &input,
                                websocket_output_stream<SERVER> &output, std::unique_ptr<request>& req) {
 
-           auto respond = [&output] (websocket_message<type> message) { return output.write(std::move(message)); };
+           auto respond = [&output] (websocket_message<type>&& message) { return output.write(std::move(message)); };
             return _on_connection(req, respond).then([this, &input, &req, respond] {
                 return repeat([this, &input, &req, respond] {
                     return input.read().then_wrapped([this, &req, respond](future<httpd::websocket_message<SERVER>> f) {
