@@ -72,14 +72,14 @@ void set_routes(routes& r) {
     auto ws_managed_handler = new websocket_handler<SERVER>();
 
     ws_managed_handler->on_connection_future([] (const std::unique_ptr<request>& req,
-                                                 std::function<future<>(httpd::websocket_message<SERVER>)> respond) {
-        return respond(websocket_message<SERVER>(websocket_opcode::TEXT, "Hello from seastar !"));
+                                                 websocket_output_stream<SERVER>& output) {
+        return output.write(websocket_message<SERVER>(websocket_opcode::TEXT, "Hello from seastar !"));
     });
 
     ws_managed_handler->on_message_future([] (const std::unique_ptr<request>& req,
-                                              std::function<future<>(httpd::websocket_message<SERVER>)> respond,
+                                              websocket_output_stream<SERVER>& output,
                                               httpd::websocket_message<SERVER> message) {
-        return respond(std::move(message));
+        return output.write(std::move(message));
     });
 
     ws_managed_handler->on_disconnection([] (const std::unique_ptr<request>& req) {

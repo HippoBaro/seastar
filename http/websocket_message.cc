@@ -4,8 +4,7 @@ uint8_t httpd::websocket_message_base::write_payload_size() {
   assert(_header_size == 0 && "httpd::websocket_message_base::done() should be called exactly once");
 
   uint8_t advertised_size = 0;
-  const auto header = opcode ^ 0x80; //FIXME Dynamically construct header
-  _header[0] = header;
+  _header[0] = fin ? 128 : 0 | 5;
 
   if (payload.size() < 125) { //Size fits 7bits
     advertised_size = (uint8_t) payload.size();
