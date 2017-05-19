@@ -50,7 +50,8 @@ void set_routes(routes& r) {
         return make_ready_future<json::json_return_type>("json-future");
     });
 
-    auto ws1 = new websocket_function_handler<SERVER>([](const std::unique_ptr<request> req, connected_websocket<SERVER> ws) -> future<> {
+    auto ws1 = new websocket_function_handler<SERVER>([](const std::unique_ptr<request> req,
+                                                         connected_websocket<SERVER> ws) -> future<> {
         auto input = ws.input();
         auto output = ws.output();
         return do_with(std::move(input), std::move(output), [] (websocket_input_stream<SERVER> &input,

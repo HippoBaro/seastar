@@ -43,7 +43,7 @@ namespace httpd {
         bool fin = false;
         temporary_buffer<char> message;
 
-        inbound_websocket_fragment_base(temporary_buffer<char> &raw, uint32_t *i) noexcept ;
+        inbound_websocket_fragment_base(temporary_buffer<char> &raw, uint32_t *i) noexcept;
 
         inbound_websocket_fragment_base(const inbound_websocket_fragment_base &) = delete;
         inbound_websocket_fragment_base(inbound_websocket_fragment_base &&fragment) noexcept :

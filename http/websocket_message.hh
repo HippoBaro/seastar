@@ -7,8 +7,8 @@ namespace httpd {
     class websocket_message_base {
     public:
         websocket_opcode opcode = RESERVED;
-        int _header_size = 0;
-        std::array<char, 14> _header;
+        uint8_t _header_size = 0;
+        std::array<unsigned char, 14> _header;
         temporary_buffer<char> payload;
         bool fin = true;
 

@@ -1,10 +1,8 @@
 #include "websocket_message.hh"
 
 uint8_t httpd::websocket_message_base::write_payload_size() {
-  assert(_header_size == 0 && "httpd::websocket_message_base::done() should be called exactly once");
-
   uint8_t advertised_size = 0;
-  _header[0] = fin ? 128 : 0 | 5;
+  _header[0] = opcode ^ (fin ? 0x80 : 0x0);
 
   if (payload.size() < 125) { //Size fits 7bits
     advertised_size = (uint8_t) payload.size();
