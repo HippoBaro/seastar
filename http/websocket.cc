@@ -3,7 +3,6 @@
 //
 
 #include "websocket.hh"
-#include "http/request_parser.hh"
 #include <cryptopp/sha.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/hex.h>
@@ -88,10 +87,10 @@ httpd::connect_websocket(socket_address sa, socket_address local) {
     });
 }
 
-future<> httpd::websocket_output_stream_base::write(httpd::websocket_message_base message) {
-    return do_with(std::move(message), [this](httpd::websocket_message_base &frag) {
-        temporary_buffer<char> head((char *) &frag._header, (size_t) frag._header_size); //FIXME copy memory to avoid mixed writes
-        return _stream.write(std::move(head)).then([this, &frag] () -> future<> {
+future<> httpd::websocket_output_stream_base::write(temporary_buffer<char> header, httpd::websocket_message_base message) {
+    return do_with(std::move(header), std::move(message), [this](temporary_buffer<char>& header,
+                                                                 httpd::websocket_message_base &frag) {
+        return _stream.write(std::move(header)).then([this, &frag] () -> future<> {
             return _stream.write(std::move(frag.payload));
         });
     });

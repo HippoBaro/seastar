@@ -25,29 +25,61 @@ namespace httpd {
         RESERVED = 0xB
     };
 
+    struct websocket_fragment_header {
+        bool fin;
+        bool rsv1;
+        websocket_opcode opcode;
+        bool masked;
+        uint64_t length;
+        uint32_t mask_key = 0;
+
+        websocket_fragment_header() = default;
+        websocket_fragment_header(temporary_buffer<char>& header) :
+                fin(header[0] & 128),
+                rsv1(header[0] & 64),
+                opcode(static_cast<websocket_opcode>(header[0] & 15)),
+                masked(header[1] & 128),
+                length(header[1] & 127) {
+        }
+
+        uint8_t extended_header_length_size() {
+            uint8_t ret = 0;
+            if (length == 126) ret += sizeof(uint16_t); // Extended length is 16 bits.
+            else if (length == 127) ret += sizeof(uint64_t); // Extended length is 64 bits.
+            return ret;
+        }
+
+        uint8_t extended_header_size() {
+            uint8_t ret = extended_header_length_size();
+            if (masked) ret += sizeof(uint32_t); // Mask key is 32bits.
+            return ret;
+        }
+
+        void feed_extended_header(temporary_buffer<char>& extended_header) {
+            if (length == 126 && extended_header.size() >= sizeof(uint16_t)) {
+                length = net::ntoh(*reinterpret_cast<const uint16_t *>(extended_header.get()));
+            } else if (length == 127 && extended_header.size() >= sizeof(uint64_t)) {
+                length = net::ntoh(*reinterpret_cast<const uint64_t *>(extended_header.get()));
+            }
+            if (masked)
+                mask_key = *reinterpret_cast<const uint32_t *>(extended_header.end() - sizeof(uint32_t));
+        }
+    };
+
     void un_mask(char *dst, const char *src, const char *mask, uint64_t length);
     bool utf8_check(const unsigned char *s, size_t length);
 
     class inbound_websocket_fragment_base {
         friend class websocket_input_stream_base;
-    protected:
-        bool _rsv1 = false;
-        uint64_t _length = 0;
-
     public:
-        uint32_t mask_key = 0;
-        websocket_opcode opcode;
-        bool fin = false;
+        websocket_fragment_header header;
         temporary_buffer<char> message;
 
-        inbound_websocket_fragment_base(temporary_buffer<char> &raw, uint32_t *i) noexcept;
+        inbound_websocket_fragment_base(websocket_fragment_header const& header, temporary_buffer<char>& payload) noexcept;
 
         inbound_websocket_fragment_base(const inbound_websocket_fragment_base &) = delete;
         inbound_websocket_fragment_base(inbound_websocket_fragment_base &&fragment) noexcept :
-                _rsv1(fragment._rsv1),
-                mask_key(fragment.mask_key),
-                opcode(fragment.opcode),
-                fin(fragment.fin),
+                header(fragment.header),
                 message(std::move(fragment.message)) { }
 
         inbound_websocket_fragment_base() = default;
@@ -55,25 +87,14 @@ namespace httpd {
         inbound_websocket_fragment_base& operator=(const inbound_websocket_fragment_base&) = delete;
         inbound_websocket_fragment_base& operator=(inbound_websocket_fragment_base &&fragment) noexcept {
             if (*this != fragment) {
-                _rsv1 = fragment._rsv1;
-                fin = fragment.fin;
-                mask_key = fragment.mask_key;
-                opcode = fragment.opcode;
+                header = fragment.header;
                 message = std::move(fragment.message);
             }
             return *this;
         }
 
-        void reset() {
-            _rsv1 = false;
-            fin = false;
-            mask_key = 0;
-            opcode = RESERVED;
-            message = temporary_buffer<char>();
-        }
-
-        operator bool() { return !message.empty() && !((_rsv1 || (opcode > 2 && opcode < 8) ||
-                    opcode > 10 || (opcode > 2 && (!fin || message.size() > 125)))); }
+        operator bool() { return !message.empty() && !((header.rsv1 || (header.opcode > 2 && header.opcode < 8) ||
+                    header.opcode > 10 || (header.opcode > 2 && (!header.fin || message.size() > 125)))); }
     };
 
     template<websocket_type type>
@@ -85,13 +106,8 @@ namespace httpd {
     public:
         inbound_websocket_fragment() noexcept {}
 
-        inbound_websocket_fragment(temporary_buffer<char> &raw, uint32_t *i) noexcept:
-                inbound_websocket_fragment_base(raw, i) {
-            if (raw.size() >= *i + _length) {
-                message = std::move(raw.share(*i, _length));
-                *i += _length;
-            }
-        }
+        inbound_websocket_fragment(websocket_fragment_header const& header, temporary_buffer<char>& payload) noexcept:
+                inbound_websocket_fragment_base(header, payload) { }
     };
 
     template<>
@@ -100,15 +116,8 @@ namespace httpd {
     public:
         inbound_websocket_fragment() {}
 
-        inbound_websocket_fragment(temporary_buffer<char> &raw, uint32_t *i) noexcept:
-                inbound_websocket_fragment_base(raw, i) {
-            if (raw.size() >= *i + _length + sizeof(uint32_t)) { //message is masked
-                mask_key = *reinterpret_cast<uint32_t *>(raw.get_write()  + *i);
-                *i += sizeof(uint32_t);
-                message = std::move(raw.share(*i, _length));
-                *i += _length;
-            }
-        }
+        inbound_websocket_fragment(websocket_fragment_header const& header, temporary_buffer<char>& payload) noexcept:
+                inbound_websocket_fragment_base(header, payload) { }
     };
 }
 
