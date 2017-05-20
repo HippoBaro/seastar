@@ -56,24 +56,18 @@ public:
                                websocket_output_stream<type> &output, std::unique_ptr<request>& req) {
             return _on_connection(req, output).then([this, &input, &output, &req] {
                 return repeat([this, &input, &output, &req] {
-                    return input.read().then_wrapped([this, &req, &output](future<httpd::websocket_message<type>> f) {
-                        if (f.failed())
+                    return input.read().then([this, &req, &output](httpd::websocket_message<type> message) {
+                        if (!message)
                             return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
-                        auto&& buf = std::get<0>(f.get());
-                        if (!buf)
-                            return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
-                        return on_message_internal(req, output, buf).then([] (bool close) {
+                        return on_message_internal(req, output, message).then([] (bool close) {
                             if (close)
                                 return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
                             return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::no);
                         });
                     });
                 });
-            }).then_wrapped([this, &req] (future<> f) {
-                if (!f.failed())
-                    return _on_disconnection(req);
-                return make_ready_future();
-            }).finally([&input, &output] {
+            }).finally([this, &req, &input, &output] {
+                _on_disconnection(req);
                 return when_all(input.close(), output.close());
             });
         });

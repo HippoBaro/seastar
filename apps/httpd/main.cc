@@ -85,7 +85,7 @@ void set_routes(routes& r) {
     });
 
     ws_managed_handler->on_disconnection([] (const std::unique_ptr<request>& req) {
-
+        print("client disconnected\n");
     });
 
     r.add(operation_type::GET, url("/"), h1);

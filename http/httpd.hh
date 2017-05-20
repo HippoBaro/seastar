@@ -33,7 +33,6 @@
 #include "core/queue.hh"
 #include "core/future-util.hh"
 #include "core/metrics_registration.hh"
-#include <iostream>
 #include <algorithm>
 #include <unordered_map>
 #include <queue>
@@ -176,6 +175,10 @@ namespace httpd {
                                 return _write_buf.flush().then([this, url] {
                                     _fd = std::move(connected_websocket<websocket_type::SERVER>(std::move(boost::get<connected_socket>(_fd)), _addr));
                                     return _server._routes.handle_ws(url, std::move(boost::get<connected_websocket<websocket_type::SERVER>>(_fd)), std::move(_req));
+                                }).then_wrapped([] (future<> f) {
+                                    if (f.failed()) {
+                                        f.get_exception();
+                                    }
                                 });
                             }
                             // FIXME: notify any exceptions in joined?
