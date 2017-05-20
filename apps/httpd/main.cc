@@ -60,7 +60,7 @@ void set_routes(routes& r) {
                 return input.read().then([&output](httpd::websocket_message<SERVER> buf) {
                     if (!buf)
                         return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
-                    return output.write(std::move(buf)).then([] {
+                    return output.write(std::move(buf)).then([&output] { return output.flush(); }).then([] {
                         return stop_iteration::no;
                     });
                 });
@@ -74,13 +74,14 @@ void set_routes(routes& r) {
 
     ws_managed_handler->on_connection_future([] (const std::unique_ptr<request>& req,
                                                  websocket_output_stream<SERVER>& output) {
-        return output.write(websocket_message<SERVER>(websocket_opcode::TEXT, "Hello from seastar !"));
+        return output.write(websocket_message<SERVER>(websocket_opcode::TEXT, "Hello from seastar !"))
+                .then([&output] { return output.flush(); });
     });
 
     ws_managed_handler->on_message_future([] (const std::unique_ptr<request>& req,
                                               websocket_output_stream<SERVER>& output,
                                               httpd::websocket_message<SERVER> message) {
-        return output.write(std::move(message));
+        return output.write(std::move(message)).then([&output] { return output.flush(); });
     });
 
     ws_managed_handler->on_disconnection([] (const std::unique_ptr<request>& req) {

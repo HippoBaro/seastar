@@ -31,7 +31,7 @@ httpd::inbound_websocket_fragment_base::inbound_websocket_fragment_base(temporar
   //First header byte
   fin = (bool) (buf[*i] & 128);
   _rsv1 = (bool) (buf[*i] & 64);
-  _opcode = static_cast<websocket_opcode>(buf[*i] & 15);
+  opcode = static_cast<websocket_opcode>(buf[*i] & 15);
 
   *i += sizeof(uint8_t);
 

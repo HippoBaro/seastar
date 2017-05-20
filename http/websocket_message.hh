@@ -66,7 +66,7 @@ namespace httpd {
         websocket_message() noexcept {}
 
         websocket_message(std::vector<inbound_websocket_fragment<CLIENT>> & fragments):
-                websocket_message_base(fragments.back().opcode(), temporary_buffer<char>(
+                websocket_message_base(fragments.back().opcode, temporary_buffer<char>(
                         std::accumulate(fragments.begin(), fragments.end(), 0,
                                         [] (size_t x, inbound_websocket_fragment<CLIENT>& y) {
                                             return x + y.message.size();
@@ -84,7 +84,7 @@ namespace httpd {
         }
 
         websocket_message(inbound_websocket_fragment<CLIENT> & fragment) noexcept:
-                websocket_message_base(fragment.opcode(), std::move(fragment.message)) { }
+                websocket_message_base(fragment.opcode, std::move(fragment.message)) { }
 
         void done() {
             _header[1] = (char) (128 | write_payload_size());
@@ -105,7 +105,7 @@ namespace httpd {
         websocket_message() noexcept {}
 
         websocket_message(std::vector<inbound_websocket_fragment<SERVER>>& fragments):
-                websocket_message_base(fragments.back().opcode(), temporary_buffer<char>(
+                websocket_message_base(fragments.back().opcode, temporary_buffer<char>(
                         std::accumulate(fragments.begin(), fragments.end(), 0,
                                         [] (size_t x, inbound_websocket_fragment<SERVER>& y) {
                                             return x + y.message.size();
@@ -123,7 +123,7 @@ namespace httpd {
         }
 
         websocket_message(inbound_websocket_fragment<SERVER> & fragment) noexcept:
-                websocket_message_base(fragment.opcode(), temporary_buffer<char>(fragment.message.size())) {
+                websocket_message_base(fragment.opcode, temporary_buffer<char>(fragment.message.size())) {
             un_mask(payload.get_write(), fragment.message.get(), (char *) (&fragment.mask_key), payload.size());
         }
 

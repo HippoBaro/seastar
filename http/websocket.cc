@@ -93,8 +93,6 @@ future<> httpd::websocket_output_stream_base::write(httpd::websocket_message_bas
         temporary_buffer<char> head((char *) &frag._header, (size_t) frag._header_size); //FIXME copy memory to avoid mixed writes
         return _stream.write(std::move(head)).then([this, &frag] () -> future<> {
             return _stream.write(std::move(frag.payload));
-        }).then([this] {
-            return _stream.flush();
         });
     });
 }
