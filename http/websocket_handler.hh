@@ -57,8 +57,6 @@ public:
             return _on_connection(req, output).then([this, &input, &output, &req] {
                 return repeat([this, &input, &output, &req] {
                     return input.read().then([this, &req, &output](httpd::websocket_message<type> message) {
-                        if (!message)
-                            return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
                         return on_message_internal(req, output, message).then([] (bool close) {
                             if (close)
                                 return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);

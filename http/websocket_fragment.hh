@@ -93,8 +93,8 @@ namespace httpd {
             return *this;
         }
 
-        operator bool() { return !message.empty() && !((header.rsv1 || (header.opcode > 2 && header.opcode < 8) ||
-                    header.opcode > 10 || (header.opcode > 2 && (!header.fin || message.size() > 125)))); }
+        operator bool() { return !((header.rsv1 || (header.opcode > 2 && header.opcode < 8) || header.opcode > 10
+                                    || (header.opcode > 2 && (!header.fin || message.size() > 125)))); }
     };
 
     template<websocket_type type>

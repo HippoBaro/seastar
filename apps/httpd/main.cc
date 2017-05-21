@@ -58,8 +58,6 @@ void set_routes(routes& r) {
                                                                 websocket_output_stream<SERVER> &output) {
             return repeat([&input, &output] {
                 return input.read().then([&output](httpd::websocket_message<SERVER> buf) {
-                    if (!buf)
-                        return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
                     return output.write(std::move(buf)).then([&output] { return output.flush(); }).then([] {
                         return stop_iteration::no;
                     });
