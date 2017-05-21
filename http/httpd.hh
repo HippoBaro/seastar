@@ -42,6 +42,7 @@
 #include <vector>
 #include <boost/intrusive/list.hpp>
 #include <boost/variant.hpp>
+#include <boost/algorithm/string.hpp>
 #include "reply.hh"
 #include "http/routes.hh"
 #include "http/websocket.hh"
@@ -387,7 +388,7 @@ namespace httpd {
                         conn_close = true;
                     } else if (it->second.find("Upgrade") != std::string::npos) {
                         auto upgrade = req->_headers.find("Upgrade");
-                        if (upgrade != req->_headers.end() && upgrade->second == "websocket")
+                        if (upgrade != req->_headers.end() && boost::iequals(upgrade->second.begin(), "websocket"))
                             return upgrade_websocket(std::move(req)); //websocket upgrade
                     }
                 }
