@@ -15,7 +15,7 @@ namespace httpd {
                 opcode(opcode), payload(std::move(payload)) {
         };
 
-        websocket_message_base(websocket_opcode opcode, sstring message, bool fin = true) noexcept :
+        websocket_message_base(websocket_opcode opcode, sstring message = "", bool fin = true) noexcept :
                 opcode(opcode), payload(std::move(std::move(message).release())), fin(fin) {
         };
 
@@ -58,7 +58,7 @@ namespace httpd {
         websocket_message() noexcept {}
 
         websocket_message(std::vector<inbound_websocket_fragment<CLIENT>> & fragments):
-                websocket_message_base(fragments.back().header.opcode, temporary_buffer<char>(
+                websocket_message_base(fragments.front().header.opcode, temporary_buffer<char>(
                         std::accumulate(fragments.begin(), fragments.end(), 0,
                                         [] (size_t x, inbound_websocket_fragment<CLIENT>& y) {
                                             return x + y.message.size();
@@ -66,8 +66,8 @@ namespace httpd {
             uint64_t k = 0;
             char* buf = payload.get_write();
             for (unsigned int j = 0; j < fragments.size(); ++j) {
-                std::memcpy(buf + k, fragments[j].message.get(), fragments.size());
-                k += fragments.size();
+                std::memcpy(buf + k, fragments[j].message.get(), fragments[j].message.size());
+                k += fragments[j].message.size();
             }
             if (opcode == websocket_opcode::TEXT &&
                 !utf8_check((const unsigned char *) buf, payload.size())) {
@@ -75,8 +75,13 @@ namespace httpd {
             }
         }
 
-        websocket_message(inbound_websocket_fragment<CLIENT> & fragment) noexcept:
-                websocket_message_base(fragment.header.opcode, std::move(fragment.message)) { }
+        websocket_message(inbound_websocket_fragment<CLIENT> & fragment):
+                websocket_message_base(fragment.header.opcode, std::move(fragment.message)) {
+            if (opcode == websocket_opcode::TEXT &&
+                !utf8_check((const unsigned char *) payload.get(), payload.size())) {
+                throw std::exception();
+            }
+        }
 
         temporary_buffer<char> get_header() {
             temporary_buffer<char> header(14);
@@ -102,7 +107,7 @@ namespace httpd {
         websocket_message() noexcept {}
 
         websocket_message(std::vector<inbound_websocket_fragment<SERVER>>& fragments):
-                websocket_message_base(fragments.back().header.opcode, temporary_buffer<char>(
+                websocket_message_base(fragments.front().header.opcode, temporary_buffer<char>(
                         std::accumulate(fragments.begin(), fragments.end(), 0,
                                         [] (size_t x, inbound_websocket_fragment<SERVER>& y) {
                                             return x + y.message.size();
@@ -110,17 +115,21 @@ namespace httpd {
             uint64_t k = 0;
             char* buf = payload.get_write();
             for (unsigned int j = 0; j < fragments.size(); ++j) {
-                un_mask(buf + k, fragments[j].message.get(), (char *) (&fragments[j].header.mask_key), fragments.size());
-                k += fragments.size();
+                un_mask(buf + k, fragments[j].message.get(), (char *) (&fragments[j].header.mask_key), fragments[j].message.size());
+                k += fragments[j].message.size();
             }
             if (opcode == websocket_opcode::TEXT && !utf8_check((const unsigned char *) buf, payload.size())) {
                 throw std::exception();
             }
         }
 
-        websocket_message(inbound_websocket_fragment<SERVER> & fragment) noexcept:
+        websocket_message(inbound_websocket_fragment<SERVER> & fragment):
                 websocket_message_base(fragment.header.opcode, temporary_buffer<char>(fragment.message.size())) {
             un_mask(payload.get_write(), fragment.message.get(), (char *) (&fragment.header.mask_key), payload.size());
+            if (opcode == websocket_opcode::TEXT &&
+                !utf8_check((const unsigned char *) payload.get(), payload.size())) {
+                throw std::exception();
+            }
         }
 
         temporary_buffer<char> get_header() {

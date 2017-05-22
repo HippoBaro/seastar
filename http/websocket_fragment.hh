@@ -28,6 +28,7 @@ namespace httpd {
     struct websocket_fragment_header {
         bool fin;
         bool rsv1;
+        bool rsv23;
         websocket_opcode opcode;
         bool masked;
         uint64_t length;
@@ -37,10 +38,10 @@ namespace httpd {
         websocket_fragment_header(temporary_buffer<char>& header) :
                 fin(header[0] & 128),
                 rsv1(header[0] & 64),
+                rsv23(header[0] & 48),
                 opcode(static_cast<websocket_opcode>(header[0] & 15)),
                 masked(header[1] & 128),
-                length(header[1] & 127) {
-        }
+                length(header[1] & 127) { }
 
         uint8_t extended_header_length_size() {
             uint8_t ret = 0;
@@ -93,7 +94,7 @@ namespace httpd {
             return *this;
         }
 
-        operator bool() { return !((header.rsv1 || (header.opcode > 2 && header.opcode < 8) || header.opcode > 10
+        operator bool() { return !((header.rsv1 || header.rsv23 || (header.opcode > 2 && header.opcode < 8) || header.opcode > 10
                                     || (header.opcode > 2 && (!header.fin || message.size() > 125)))); }
     };
 

@@ -50,47 +50,33 @@ void set_routes(routes& r) {
         return make_ready_future<json::json_return_type>("json-future");
     });
 
-    auto ws1 = new websocket_function_handler<SERVER>([](const std::unique_ptr<request> req,
+    auto ws_raw = new websocket_function_handler<SERVER>([](const std::unique_ptr<request> req,
                                                          connected_websocket<SERVER> ws) -> future<> {
-        auto input = ws.input();
-        auto output = ws.output();
-        return do_with(std::move(input), std::move(output), [] (websocket_input_stream<SERVER> &input,
-                                                                websocket_output_stream<SERVER> &output) {
-            return repeat([&input, &output] {
-                return input.read().then([&output](httpd::websocket_message<SERVER> buf) {
-                    return output.write(std::move(buf)).then([&output] { return output.flush(); }).then([] {
+        auto stream = ws.stream();
+        return do_with(std::move(stream), [] (websocket_stream<SERVER> &stream) {
+            return repeat([&stream] {
+                return stream.read().then([&stream](httpd::websocket_message<SERVER> buf) {
+                    return stream.write(std::move(buf)).then([&stream] { return stream.flush(); }).then([] {
                         return stop_iteration::no;
                     });
                 });
-            }).finally([&input, &output] {
-                return when_all(input.close(), output.close());
             });
         });
     });
 
-    auto ws_managed_handler = new websocket_handler<SERVER>();
+    auto ws_echo_handler = new websocket_handler<SERVER>();
 
-    ws_managed_handler->on_connection_future([] (const std::unique_ptr<request>& req,
-                                                 websocket_output_stream<SERVER>& output) {
-        return output.write(websocket_message<SERVER>(websocket_opcode::TEXT, "Hello from seastar !"))
-                .then([&output] { return output.flush(); });
-    });
-
-    ws_managed_handler->on_message_future([] (const std::unique_ptr<request>& req,
-                                              websocket_output_stream<SERVER>& output,
+    ws_echo_handler->on_message_future([] (const std::unique_ptr<request>& req,
+                                              websocket_stream<SERVER>& stream,
                                               httpd::websocket_message<SERVER> message) {
-        return output.write(std::move(message)).then([&output] { return output.flush(); });
-    });
-
-    ws_managed_handler->on_disconnection([] (const std::unique_ptr<request>& req) {
-        print("client disconnected\n");
+        return stream.write(std::move(message)).then([&stream] { return stream.flush(); });
     });
 
     r.add(operation_type::GET, url("/"), h1);
     r.add(operation_type::GET, url("/jf"), h2);
     r.add(operation_type::GET, url("/file").remainder("path"), new directory_handler("/"));
-    r.put("/managed", ws_managed_handler);
-    r.put("/", ws1);
+    r.put("/", ws_echo_handler);
+    r.put("/raw_ws", ws_raw);
 
     demo_json::hello_world.set(r, [] (const_req req) {
         demo_json::my_object obj;
