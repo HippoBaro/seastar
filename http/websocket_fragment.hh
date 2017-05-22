@@ -2,13 +2,25 @@
 // Created by hbarraud on 4/2/17.
 //
 
-#ifndef SEASTAR_WEBSOCKET_FRAGMENT_HH
-#define SEASTAR_WEBSOCKET_FRAGMENT_HH
+#pragma once
 
 #include <core/reactor.hh>
 #include <random>
 
 namespace httpd {
+
+    enum websocket_close_status_code : uint16_t {
+        NORMAL_CLOSURE = 1000,
+        GOING_AWAY = 1001,
+        PROTOCOL_ERROR = 1002,
+        CANNOT_ACCEPT = 1003,
+        INCONSISTENT_DATA = 1007,
+        POLICY_VIOLATION = 1008,
+        MESSAGE_TOO_BIG = 1009,
+        EXPECTED_EXTENSION = 1010,
+        UNEXPECTED_CONDITION = 1011,
+        NONE
+    };
 
     enum websocket_type {
         SERVER,
@@ -23,6 +35,14 @@ namespace httpd {
         PING = 0x9,
         PONG = 0xA,
         RESERVED = 0xB
+    };
+
+    class websocket_exception final : public std::exception {
+    public:
+        websocket_close_status_code status_code;
+
+        websocket_exception(websocket_close_status_code status_code = NORMAL_CLOSURE) noexcept :
+                status_code(status_code) { }
     };
 
     struct websocket_fragment_header {
@@ -94,7 +114,8 @@ namespace httpd {
             return *this;
         }
 
-        operator bool() { return !((header.rsv1 || header.rsv23 || (header.opcode > 2 && header.opcode < 8) || header.opcode > 10
+        operator bool() { return !((header.rsv1 || header.rsv23 || (header.opcode > 2 && header.opcode < 8)
+                                    || header.opcode > 10
                                     || (header.opcode > 2 && (!header.fin || message.size() > 125)))); }
     };
 
@@ -121,5 +142,3 @@ namespace httpd {
                 inbound_websocket_fragment_base(header, payload) { }
     };
 }
-
-#endif //SEASTAR_WEBSOCKET_FRAGMENT_HH

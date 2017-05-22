@@ -2,8 +2,7 @@
 // Created by hbarraud on 4/1/17.
 //
 
-#ifndef SEASTAR_WEBSOCKET_HANDLER_HH
-#define SEASTAR_WEBSOCKET_HANDLER_HH
+#pragma once
 
 #include "handlers.hh"
 
@@ -131,6 +130,3 @@ protected:
 };
 
 }
-
-
-#endif //SEASTAR_WEBSOCKET_HANDLER_HH

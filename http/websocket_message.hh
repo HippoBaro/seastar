@@ -1,7 +1,6 @@
 #include "websocket_fragment.hh"
 
-#ifndef SEASTAR_WEBSOCKET_MESSAGE_HH
-#define SEASTAR_WEBSOCKET_MESSAGE_HH
+#pragma once
 
 namespace httpd {
     class websocket_message_base {
@@ -71,7 +70,7 @@ namespace httpd {
             }
             if (opcode == websocket_opcode::TEXT &&
                 !utf8_check((const unsigned char *) buf, payload.size())) {
-                throw std::exception();
+                throw websocket_exception(INCONSISTENT_DATA);
             }
         }
 
@@ -79,8 +78,16 @@ namespace httpd {
                 websocket_message_base(fragment.header.opcode, std::move(fragment.message)) {
             if (opcode == websocket_opcode::TEXT &&
                 !utf8_check((const unsigned char *) payload.get(), payload.size())) {
-                throw std::exception();
+                throw websocket_exception(INCONSISTENT_DATA);
             }
+        }
+
+        static websocket_message make_close_message(websocket_close_status_code code = NORMAL_CLOSURE) {
+            if (code == NONE)
+                return websocket_message<CLIENT>(CLOSE);
+            sstring payload(sizeof(uint16_t), '\0');
+            *(reinterpret_cast<uint16_t *>(payload.begin())) = net::hton((uint16_t)code);
+            return websocket_message<CLIENT>(CLOSE, std::move(payload));
         }
 
         temporary_buffer<char> get_header() {
@@ -119,7 +126,7 @@ namespace httpd {
                 k += fragments[j].message.size();
             }
             if (opcode == websocket_opcode::TEXT && !utf8_check((const unsigned char *) buf, payload.size())) {
-                throw std::exception();
+                throw websocket_exception(INCONSISTENT_DATA);
             }
         }
 
@@ -128,8 +135,16 @@ namespace httpd {
             un_mask(payload.get_write(), fragment.message.get(), (char *) (&fragment.header.mask_key), payload.size());
             if (opcode == websocket_opcode::TEXT &&
                 !utf8_check((const unsigned char *) payload.get(), payload.size())) {
-                throw std::exception();
+                throw websocket_exception(INCONSISTENT_DATA);
             }
+        }
+
+        static websocket_message make_close_message(websocket_close_status_code code = NORMAL_CLOSURE) {
+            if (code == NONE)
+                return websocket_message<SERVER>(CLOSE);
+            sstring payload(sizeof(uint16_t), '\0');
+            *(reinterpret_cast<uint16_t *>(payload.begin())) = net::hton((uint16_t)code);
+            return websocket_message<SERVER>(CLOSE, std::move(payload));
         }
 
         temporary_buffer<char> get_header() {
@@ -143,5 +158,3 @@ namespace httpd {
         };
     };
 }
-
-#endif
