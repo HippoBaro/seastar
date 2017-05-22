@@ -57,10 +57,8 @@ public:
             return _on_connection(req, stream).then([this, &stream, &req] {
                 return repeat([this, &stream, &req] {
                     return stream.read().then([this, &req, &stream](httpd::websocket_message<type> message) {
-                        return on_message_internal(req, stream, message).then([] (bool close) {
-                            if (close)
-                                return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::yes);
-                            return make_ready_future<bool_class<stop_iteration_tag>>(stop_iteration::no);
+                        return on_message_internal(req, stream, message).then([] {
+                            return stop_iteration::no;
                         });
                     });
                 });
@@ -109,27 +107,18 @@ public:
 
 private:
 
-    future<bool> on_message_internal(const std::unique_ptr<request>& req,
-                                     websocket_stream<type>& stream,
-                                     httpd::websocket_message<type>& message) {
+    future<> on_message_internal(const std::unique_ptr<request>& req, websocket_stream<type>& stream,
+                                 httpd::websocket_message<type>& message) {
         switch (message.opcode) {
             case TEXT:
             case BINARY:
-                return _on_message(req, stream, std::move(message)).then([] {
-                    return false;
-                });
+                return _on_message(req, stream, std::move(message));
             case PING:
-                return _on_ping(req, stream, std::move(message)).then([] {
-                    return false;
-                });
+                return _on_ping(req, stream, std::move(message));
             case PONG:
-                return _on_pong(req, stream, std::move(message)).then([] {
-                    return false;
-                });
-            case CLOSE:
-            case RESERVED:
-            default:
-                return make_ready_future<bool>(true);
+                return _on_pong(req, stream, std::move(message));
+            default: //Other opcode are handled at a lower, protocol level.
+                throw std::exception();
         }
     }
 
