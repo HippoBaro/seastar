@@ -19,6 +19,8 @@
  * Copyright 2015 Cloudius Systems
  */
 
+#include <cryptopp/sha.h>
+#include <cryptopp/base64.h>
 #include "http/httpd.hh"
 #include "http/handlers.hh"
 #include "http/websocket_handler.hh"
@@ -31,6 +33,7 @@ namespace bpo = boost::program_options;
 
 using namespace seastar;
 using namespace httpd;
+using namespace websocket;
 
 class handl : public httpd::handler_base {
 public:
@@ -50,12 +53,12 @@ void set_routes(routes& r) {
         return make_ready_future<json::json_return_type>("json-future");
     });
 
-    auto ws_raw = new websocket_function_handler<SERVER>([](const std::unique_ptr<request> req,
-                                                         connected_websocket<SERVER> ws) -> future<> {
+    auto ws_raw = new ws_function_handler<SERVER>([](const std::unique_ptr<request> req,
+    connected_websocket<SERVER> ws) -> future<> {
         auto stream = ws.stream();
-        return do_with(std::move(stream), [] (websocket_stream<SERVER> &stream) {
+        return do_with(std::move(stream), [] (duplex_stream<SERVER> &stream) {
             return repeat([&stream] {
-                return stream.read().then([&stream](httpd::websocket_message<SERVER> buf) {
+                return stream.read().then([&stream](message<SERVER> buf) {
                     return stream.write(std::move(buf)).then([&stream] { return stream.flush(); }).then([] {
                         return stop_iteration::no;
                     });
@@ -64,12 +67,46 @@ void set_routes(routes& r) {
         });
     });
 
-    auto ws_echo_handler = new websocket_handler<SERVER>();
+    auto ws_echo_handler = new websocket::ws_handler<SERVER>();
 
     ws_echo_handler->on_message_future([] (const std::unique_ptr<request>& req,
-                                              websocket_stream<SERVER>& stream,
-                                              httpd::websocket_message<SERVER> message) {
+                                              duplex_stream<SERVER>& stream,
+                                              message<SERVER> message) {
         return stream.write(std::move(message)).then([&stream] { return stream.flush(); });
+    });
+
+    auto ws_sha1_handler = new websocket::ws_handler<SERVER>();
+
+    ws_sha1_handler->on_connection_future([] (const std::unique_ptr<request>& req, duplex_stream<SERVER>& stream) {
+        return stream.write(websocket::message<SERVER>(TEXT, "Hello from seastar ! Send any message to this endpoint and get back the "
+                "payload SHA1 in base64 format !")).then([&stream] { return stream.flush(); });
+    });
+
+    ws_sha1_handler->on_message_future([] (const std::unique_ptr<request>& req, duplex_stream<SERVER>& stream,
+            message<SERVER> message) {
+        CryptoPP::SHA hash;
+        byte digest[CryptoPP::SHA::DIGESTSIZE];
+        hash.Update((byte*) message.payload.begin(), message.payload.size());
+        hash.Final(digest);
+
+        sstring base64;
+
+        CryptoPP::Base64Encoder encoder;
+        encoder.Put(digest, sizeof(digest));
+        encoder.MessageEnd();
+        CryptoPP::word64 size = encoder.MaxRetrievable();
+        if (size) {
+            base64.resize(size);
+            encoder.Get((byte*) base64.data(), base64.size());
+        }
+
+        return stream.write(websocket::message<SERVER>(TEXT, base64.substr(0, base64.size() - 1))).then([&stream] {
+            return stream.flush();
+        });
+    });
+
+    ws_sha1_handler->on_disconnection([] (const std::unique_ptr<request>& req) {
+        print("websocket client disconnected\n");
     });
 
     r.add(operation_type::GET, url("/"), h1);
@@ -77,6 +114,7 @@ void set_routes(routes& r) {
     r.add(operation_type::GET, url("/file").remainder("path"), new directory_handler("/"));
     r.put("/", ws_echo_handler);
     r.put("/raw_ws", ws_raw);
+    r.put("/ws_sha1", ws_sha1_handler);
 
     demo_json::hello_world.set(r, [] (const_req req) {
         demo_json::my_object obj;

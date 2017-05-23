@@ -8,15 +8,17 @@
 #include <cryptopp/hex.h>
 #include <cryptopp/base64.h>
 
-sstring
-httpd::generate_websocket_key(sstring nonce) {
-    constexpr char websocket_uuid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-    constexpr size_t websocket_uuid_len = 36;
+namespace seastar {
+namespace httpd {
+namespace websocket {
+sstring encode_handshake_key(sstring nonce) {
+    constexpr char uuid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    constexpr size_t uuid_len = 36;
 
     CryptoPP::SHA hash;
     byte digest[CryptoPP::SHA::DIGESTSIZE];
-    hash.Update((byte *) nonce.data(), nonce.size());
-    hash.Update((byte *) websocket_uuid, websocket_uuid_len);
+    hash.Update((byte*) nonce.data(), nonce.size());
+    hash.Update((byte*) uuid, uuid_len);
     hash.Final(digest);
 
     sstring base64;
@@ -27,20 +29,20 @@ httpd::generate_websocket_key(sstring nonce) {
     CryptoPP::word64 size = encoder.MaxRetrievable();
     if (size) {
         base64.resize(size);
-        encoder.Get((byte *) base64.data(), base64.size());
+        encoder.Get((byte*) base64.data(), base64.size());
     }
 
     return base64.substr(0, base64.size() - 1); //fixme useless cpy
 }
 
-future<httpd::connected_websocket<httpd::websocket_type::CLIENT>>
-httpd::connect_websocket(socket_address sa, socket_address local) {
-    return engine().net().connect(sa, local).then([local] (connected_socket fd) {
-        input_stream<char> in = std::move(fd.input());
-        output_stream<char> out = std::move(fd.output());
-        return do_with(std::move(fd), std::move(in), std::move(out), [local](connected_socket &fd,
-                                                                             input_stream<char> &in,
-                                                                             output_stream<char> &out) {
+future<websocket::connected_websocket<websocket::endpoint_type::CLIENT>>
+connect(socket_address sa, socket_address local) {
+    return engine().net().connect(sa, local).then([local](connected_socket fd) {
+        seastar::input_stream<char> in = std::move(fd.input());
+        seastar::output_stream<char> out = std::move(fd.output());
+        return do_with(std::move(fd), std::move(in), std::move(out), [local](connected_socket& fd,
+                auto& in,
+                auto& out) {
             using random_bytes_engine = std::independent_bits_engine<
                     std::default_random_engine, std::numeric_limits<unsigned char>::digits, unsigned char>;
 
@@ -50,12 +52,12 @@ httpd::connect_websocket(socket_address sa, socket_address local) {
 
             sstring nonce;
             CryptoPP::Base64Encoder encoder;
-            encoder.Put((byte *) key.data(), key.size());
+            encoder.Put((byte*) key.data(), key.size());
             encoder.MessageEnd();
             CryptoPP::word64 size = encoder.MaxRetrievable();
             if (size) {
                 nonce.resize(size);
-                encoder.Get((byte *) nonce.data(), nonce.size());
+                encoder.Get((byte*) nonce.data(), nonce.size());
             } else {
                 //fixme throw ?
             }
@@ -63,19 +65,21 @@ httpd::connect_websocket(socket_address sa, socket_address local) {
 
             std::stringstream stream;
             //FIXME construct correct request header
-            stream << "GET / HTTP/1.1\r\nHost: 127.0.0.1:10000\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-                   << "Sec-WebSocket-Key: " << nonce << "\r\nSec-WebSocket-Protocol: default\r\nSec-WebSocket-Version: 13\r\n\r\n";
+            stream
+                    << "GET / HTTP/1.1\r\nHost: 127.0.0.1:10000\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                    << "Sec-WebSocket-Key: " << nonce
+                    << "\r\nSec-WebSocket-Protocol: default\r\nSec-WebSocket-Version: 13\r\n\r\n";
 
             return out.write(stream.str()).then([local, nonce, &out, &in, &fd] {
                 return out.flush();
             }).then([local, nonce, &in, &fd] {
                 //FIXME extend http request parser to support header only payload (no HTTP verb)
-                return in.read().then([local, nonce, &fd] (temporary_buffer<char> response) {
+                return in.read().then([local, nonce, &fd](temporary_buffer<char> response) {
                     if (!response)
                         throw std::exception(); //FIXME : proper failure
                     if (std::experimental::string_view(response.begin(), response.size())
-                                .find(httpd::generate_websocket_key(nonce)) != std::string::npos) {
-                        return httpd::connected_websocket<httpd::websocket_type::CLIENT>(std::move(fd), local);
+                            .find(encode_handshake_key(nonce)) != std::string::npos) {
+                        return websocket::connected_websocket<websocket::endpoint_type::CLIENT>(std::move(fd), local);
                     } else {
                         fd.shutdown_input();
                         fd.shutdown_output();
@@ -86,12 +90,6 @@ httpd::connect_websocket(socket_address sa, socket_address local) {
         });
     });
 }
-
-future<> httpd::websocket_output_stream_base::write(temporary_buffer<char> header, httpd::websocket_message_base message) {
-    return do_with(std::move(header), std::move(message), [this](temporary_buffer<char>& header,
-                                                                 httpd::websocket_message_base &frag) {
-        return _stream.write(std::move(header)).then([this, &frag] () -> future<> {
-            return _stream.write(std::move(frag.payload));
-        });
-    });
+}
+}
 }

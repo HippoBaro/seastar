@@ -24,13 +24,16 @@
 +---------------------------------------------------------------+
 */
 
+namespace seastar {
+namespace httpd {
+namespace websocket {
 
-httpd::inbound_websocket_fragment_base::inbound_websocket_fragment_base(websocket_fragment_header const& header, temporary_buffer<char>& payload) noexcept:
+inbound_fragment_base::inbound_fragment_base(fragment_header const& header, temporary_buffer<char>& payload) noexcept:
         header(header), message(std::move(payload)) { }
 
-void httpd::un_mask(char *dst, const char *src, const char *mask, uint64_t length) {
-    uint32_t *dst_32 = (uint32_t *) dst;
-    uint32_t *src_32 = (uint32_t *) src;
+void un_mask(char* dst, const char* src, const char* mask, uint64_t length) {
+    uint32_t* dst_32 = (uint32_t*) dst;
+    uint32_t* src_32 = (uint32_t*) src;
     uint32_t mask_32 = *reinterpret_cast<const uint32_t*>(mask);
 
     for (unsigned int k = 0; k < length >> 2; ++k) {
@@ -46,10 +49,9 @@ void httpd::un_mask(char *dst, const char *src, const char *mask, uint64_t lengt
 
 // Extracted from https://www.cl.cam.ac.uk/~mgk25/ucs/utf8_check.c
 // Licence : https://www.cl.cam.ac.uk/~mgk25/short-license.html
-bool httpd::utf8_check(const unsigned char *s, size_t length)
-{
-    for (const unsigned char *e = s + length; s != e; ) {
-        if (s + 4 <= e && ((*(uint32_t *) s) & 0x80808080) == 0) {
+bool utf8_check(const unsigned char* s, size_t length) {
+    for (const unsigned char* e = s + length; s != e;) {
+        if (s + 4 <= e && ((*(uint32_t*) s) & 0x80808080) == 0) {
             s += 4;
         } else {
             while (!(*s & 0x80)) {
@@ -64,13 +66,13 @@ bool httpd::utf8_check(const unsigned char *s, size_t length)
                 s += 2;
             } else if ((s[0] & 0xf0) == 0xe0) {
                 if (s + 2 >= e || (s[1] & 0xc0) != 0x80 || (s[2] & 0xc0) != 0x80 ||
-                    (s[0] == 0xe0 && (s[1] & 0xe0) == 0x80) || (s[0] == 0xed && (s[1] & 0xe0) == 0xa0)) {
+                        (s[0] == 0xe0 && (s[1] & 0xe0) == 0x80) || (s[0] == 0xed && (s[1] & 0xe0) == 0xa0)) {
                     return false;
                 }
                 s += 3;
             } else if ((s[0] & 0xf8) == 0xf0) {
                 if (s + 3 >= e || (s[1] & 0xc0) != 0x80 || (s[2] & 0xc0) != 0x80 || (s[3] & 0xc0) != 0x80 ||
-                    (s[0] == 0xf0 && (s[1] & 0xf0) == 0x80) || (s[0] == 0xf4 && s[1] > 0x8f) || s[0] > 0xf4) {
+                        (s[0] == 0xf0 && (s[1] & 0xf0) == 0x80) || (s[0] == 0xf4 && s[1] > 0x8f) || s[0] > 0xf4) {
                     return false;
                 }
                 s += 4;
@@ -80,4 +82,9 @@ bool httpd::utf8_check(const unsigned char *s, size_t length)
         }
     }
     return true;
+}
+
+
+}
+}
 }

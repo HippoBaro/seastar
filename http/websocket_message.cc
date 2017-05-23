@@ -1,11 +1,15 @@
 #include "websocket_message.hh"
 
-uint8_t httpd::websocket_message_base::write_payload_size(char* header) {
+namespace seastar {
+namespace httpd {
+namespace websocket {
+
+uint8_t message_base::write_payload_size(char* header) {
     uint8_t advertised_size = 0;
     header[0] = opcode ^ (fin ? 0x80 : 0x0);
 
     if (payload.size() < 126) { //Size fits 7bits
-        advertised_size = (uint8_t) payload.size();
+        advertised_size = (uint8_t)payload.size();
         _header_size = 2;
     } else if (payload.size() <= std::numeric_limits<uint16_t>::max()) { //Size in extended to 16bits
         advertised_size = 126;
@@ -19,4 +23,8 @@ uint8_t httpd::websocket_message_base::write_payload_size(char* header) {
         _header_size = 10;
     }
     return advertised_size;
+}
+
+}
+}
 }
