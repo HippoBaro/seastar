@@ -53,34 +53,22 @@ void set_routes(routes& r) {
         return make_ready_future<json::json_return_type>("json-future");
     });
 
-    auto ws_raw = new ws_function_handler<SERVER>([](const std::unique_ptr<request> req,
-    connected_websocket<SERVER>& ws) -> future<> {
-        return do_with(ws.stream(), [] (duplex_stream<SERVER> &stream) {
-            return repeat([&stream] {
-                return stream.read().then([&stream](message<SERVER> buf) {
-                    if (buf.opcode == PING)
-                        buf.opcode = PONG;
-                    return stream.write(std::move(buf)).then([&stream] { return stream.flush(); }).then([] {
-                        return stop_iteration::no;
-                    });
-                });
-            });
-        });
-    });
-
     auto ws_echo_handler = new websocket::ws_handler<SERVER>();
 
-    ws_echo_handler->on_message_future([] (const std::unique_ptr<request>& req,
-                                              duplex_stream<SERVER>& stream,
-                                              message<SERVER> message) {
-        return stream.write(std::move(message)).then([&stream] { return stream.flush(); });
+    ws_echo_handler->on_message_future([] (const std::unique_ptr<request>& req, duplex_stream<SERVER>& stream,
+            message<SERVER> message) {
+        return stream.write(std::move(message)).then([&stream] {
+            return stream.flush();
+        });
     });
 
     auto ws_sha1_handler = new websocket::ws_handler<SERVER>();
 
     ws_sha1_handler->on_connection_future([] (const std::unique_ptr<request>& req, duplex_stream<SERVER>& stream) {
-        return stream.write(websocket::message<SERVER>(TEXT, "Hello from seastar ! Send any message to this endpoint and get back the "
-                "payload SHA1 in base64 format !")).then([&stream] { return stream.flush(); });
+        return stream.write(websocket::message<SERVER>(TEXT, "Hello from seastar ! Send any message to this endpoint"
+                " and get back it's payload SHA1 in base64 format !")).then([&stream] {
+            return stream.flush();
+        });
     });
 
     ws_sha1_handler->on_message_future([] (const std::unique_ptr<request>& req, duplex_stream<SERVER>& stream,
@@ -114,8 +102,7 @@ void set_routes(routes& r) {
     r.add(operation_type::GET, url("/jf"), h2);
     r.add(operation_type::GET, url("/file").remainder("path"), new directory_handler("/"));
     r.put("/", ws_echo_handler);
-    r.put("/raw_ws", ws_raw);
-    r.put("/ws_sha1", ws_sha1_handler);
+    r.put("/sha1", ws_sha1_handler);
 
     demo_json::hello_world.set(r, [] (const_req req) {
         demo_json::my_object obj;

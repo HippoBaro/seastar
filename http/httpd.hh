@@ -442,7 +442,7 @@ public:
         }
 
         future<connection_status> upgrade_websocket(std::unique_ptr<request> req) {
-            connection_status done = detach;
+            connection_status done;
 
             sstring url = set_query_param(*req.get());
             auto resp = std::make_unique<reply>();
@@ -457,13 +457,13 @@ public:
                 resp->_headers["Sec-WebSocket-Accept"] = httpd::websocket::encode_handshake_key(it->second);
                 resp->set_status(reply::status_type::switching_protocols).done();
                 _req = std::move(req);
+                _done = done = detach;
             } else {
                 //Refused
                 _done = done = close;
                 resp->set_status(reply::status_type::bad_request);
             }
             resp->done();
-            _done = done = detach;
             _replies.push(std::move(resp));
             return make_ready_future<connection_status>(done);
         }
