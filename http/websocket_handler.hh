@@ -13,14 +13,14 @@ namespace websocket {
 template<websocket::endpoint_type type>
 class ws_function_handler : public httpd::handler_websocket_base {
     typedef std::function<future<>(std::unique_ptr<request>,
-            websocket::connected_websocket<type>)> future_ws_handler_function;
+            websocket::connected_websocket<type>&)> future_ws_handler_function;
 public:
     ws_function_handler(const future_ws_handler_function& f_handle)
             : _f_handle(f_handle) {
     }
 
-    future<> handle(const sstring& path, connected_websocket<type> ws, std::unique_ptr<request> request) override {
-        return _f_handle(std::move(request), std::move(ws));
+    future<> handle(const sstring& path, connected_websocket<type>& ws, std::unique_ptr<request> request) override {
+        return _f_handle(std::move(request), ws);
     }
 
 protected:
@@ -55,10 +55,9 @@ public:
 
     }
 
-    future<> handle(const sstring& path, connected_websocket<type> ws, std::unique_ptr<request> req) override {
-        return do_with(std::move(ws), ws.stream(), std::move(req),
-                [this](connected_websocket<type>& ws, duplex_stream<type>& stream,
-                        std::unique_ptr<request>& req) {
+    future<> handle(const sstring& path, connected_websocket<type>& ws, std::unique_ptr<request> req) override {
+        return do_with(ws.stream(), std::move(req),
+                [this](duplex_stream<type>& stream, std::unique_ptr<request>& req) {
                     return _on_connection(req, stream).then([this, &stream, &req] {
                         return repeat([this, &stream, &req] {
                             return stream.read().then([this, &req, &stream](message<type> message) {

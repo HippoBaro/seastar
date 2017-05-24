@@ -54,11 +54,12 @@ void set_routes(routes& r) {
     });
 
     auto ws_raw = new ws_function_handler<SERVER>([](const std::unique_ptr<request> req,
-    connected_websocket<SERVER> ws) -> future<> {
-        auto stream = ws.stream();
-        return do_with(std::move(stream), [] (duplex_stream<SERVER> &stream) {
+    connected_websocket<SERVER>& ws) -> future<> {
+        return do_with(ws.stream(), [] (duplex_stream<SERVER> &stream) {
             return repeat([&stream] {
                 return stream.read().then([&stream](message<SERVER> buf) {
+                    if (buf.opcode == PING)
+                        buf.opcode = PONG;
                     return stream.write(std::move(buf)).then([&stream] { return stream.flush(); }).then([] {
                         return stop_iteration::no;
                     });

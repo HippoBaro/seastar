@@ -187,9 +187,8 @@ public:
                             return _write_buf.flush().then([this, url] {
                                 _fd = std::move(websocket::connected_websocket<websocket::endpoint_type::SERVER>(
                                         std::move(boost::get<connected_socket>(_fd)), _addr));
-                                return _server._routes.handle_ws(url, std::move(
-                                        boost::get<websocket::connected_websocket<websocket::endpoint_type::SERVER>>
-                                                (_fd)), std::move(_req));
+                                return _server._routes.handle_ws(url, boost::get<websocket::connected_websocket<websocket::endpoint_type::SERVER>>
+                                                (_fd), std::move(_req));
                             }).then_wrapped([](future<> f) {
                                 if (f.failed()) {
                                     f.get_exception();
@@ -206,6 +205,11 @@ public:
             if (_fd.which() == 0) {
                 boost::get<connected_socket>(_fd).shutdown_input();
                 boost::get<connected_socket>(_fd).shutdown_output();
+            } else {
+                boost::get<websocket::connected_websocket<websocket::endpoint_type::SERVER>>
+                        (_fd).shutdown_input();
+                boost::get<websocket::connected_websocket<websocket::endpoint_type::SERVER>>
+                        (_fd).shutdown_output();
             }
         }
 

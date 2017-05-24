@@ -108,14 +108,14 @@ future<std::unique_ptr<reply> > routes::handle(const sstring& path, std::unique_
     return make_ready_future<std::unique_ptr<reply>>(std::move(rep));
 }
 
-future<> routes::handle_ws(const sstring &path, websocket::connected_websocket<websocket::endpoint_type::SERVER> ws,
+future<> routes::handle_ws(const sstring &path, websocket::connected_websocket<websocket::endpoint_type::SERVER>& ws,
                            std::unique_ptr<request> request) {
     handler_websocket_base* handler = get_ws_handler(normalize_url(path), request);
     if (handler != nullptr) {
         for (auto& i : handler->_mandatory_param) {
             verify_param(request, i);
         }
-        return handler->handle(path, std::move(ws), std::move(request));
+        return handler->handle(path, ws, std::move(request));
     }
     return make_ready_future();
 }
