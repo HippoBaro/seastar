@@ -25,14 +25,14 @@ namespace seastar {
 namespace httpd {
 namespace websocket {
 
-uint8_t message_base::write_payload_size(char* header) {
+uint8_t message_base::write_header(char* header) {
     uint8_t advertised_size = 0;
     header[0] = opcode ^ (fin ? 0x80 : 0x0);
 
     if (payload.size() < 126) { //Size fits 7bits
         advertised_size = (uint8_t)payload.size();
         _header_size = 2;
-    } else if (payload.size() <= std::numeric_limits<uint16_t>::max()) { //Size in extended to 16bits
+    } else if (payload.size() <= std::numeric_limits<uint16_t>::max()) { //Size is extended to 16bits
         advertised_size = 126;
         auto s = net::hton(static_cast<uint16_t>(payload.size()));
         std::memmove(header + sizeof(uint16_t), &s, sizeof(uint16_t));
@@ -46,7 +46,8 @@ uint8_t message_base::write_payload_size(char* header) {
     return advertised_size;
 }
 
-void un_mask(char* dst, const char* src, const char* mask, uint64_t length) {
+inline void un_mask(char* dst, const char* src, const char* mask, uint64_t length) {
+    //TODO good candidate for SIMD
     for (uint64_t j = 0; j < length; ++j) {
         dst[j] = src[j] ^ mask[j % 4];
     }

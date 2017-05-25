@@ -30,8 +30,7 @@ namespace httpd {
 namespace websocket {
 
 /**
- * Mask or unmask a buffer with the provided masking key. It's optimized to mask 32 bits at a time instead of 8 as
- * the RFC suggest.
+ * Mask or unmask a buffer with the provided masking key.
  * Also, it is used as a concatenation utility, effectively masking/unmasking _and_ copying buffers to concatenate
  * fragmented messages.
  * @param dst pointer to the destination buffer where data are to be copied
@@ -39,13 +38,13 @@ namespace websocket {
  * @param mask pointer to the 4-bytes masking key.
  * @param length how many bytes to mask/unmask.
  */
-void un_mask(char* dst, const char* src, const char* mask, uint64_t length);
+inline void un_mask(char* dst, const char* src, const char* mask, uint64_t length);
 
 /**
  * Utility function. Check for UTF-8 encoding
  * Extracted from https://www.cl.cam.ac.uk/~mgk25/ucs/utf8_check.c
  * Licence : https://www.cl.cam.ac.uk/~mgk25/short-license.html
- * @param s pointer to the buffer that is to be check against UTF-8 encoding
+ * @param s pointer to the buffer that is to be checked against UTF-8 encoding
  * @param length how many bytes to check.
  * @return returns true if the data is a valid UTF-8 encoded string, false otherwise.
  */
@@ -90,7 +89,7 @@ public:
 
     explicit operator bool() const { return !payload.empty(); }
 
-    uint8_t write_payload_size(char* header);
+    uint8_t write_header(char* header);
 };
 
 template<websocket::endpoint_type type>
@@ -113,6 +112,7 @@ public:
         uint64_t k = 0;
         char* buf = payload.get_write();
         for (unsigned int j = 0; j < fragments.size(); ++j) {
+            //SERVER never mask data, so we concatenate all fragments to assemble the final message
             std::memcpy(buf + k, fragments[j].message.get(), fragments[j].message.size());
             k += fragments[j].message.size();
         }
@@ -121,8 +121,7 @@ public:
         }
     }
 
-    message(inbound_fragment <CLIENT>& fragment) :
-            message_base(fragment.header.opcode, std::move(fragment.message)) {
+    message(inbound_fragment <CLIENT>& fragment) : message_base(fragment.header.opcode, std::move(fragment.message)) {
         if (opcode == opcode::TEXT && !utf8_check((const unsigned char*)payload.get(), payload.size())) {
             throw websocket_exception(INCONSISTENT_DATA);
         }
@@ -132,7 +131,7 @@ public:
         temporary_buffer<char> header(14);
         auto wr = header.get_write();
 
-        wr[1] = (char)(128 | write_payload_size(wr));
+        wr[1] = (char)(128 | write_header(wr));
         //FIXME Constructing an independent_bits_engine is expensive. static thread_local ?
         static thread_local std::independent_bits_engine<std::default_random_engine, std::numeric_limits<uint32_t>::digits, uint32_t> rbe;
         uint32_t mask = rbe();
@@ -181,7 +180,7 @@ public:
         temporary_buffer<char> header(14);
         auto wr = header.get_write();
 
-        wr[1] = write_payload_size(wr);
+        wr[1] = write_header(wr);
         header.trim(_header_size);
 
         return std::move(header);
