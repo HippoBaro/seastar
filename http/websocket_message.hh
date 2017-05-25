@@ -1,3 +1,24 @@
+/*
+ * This file is open source software, licensed to you under the terms
+ * of the Apache License, Version 2.0 (the "License").  See the NOTICE file
+ * distributed with this work for additional information regarding copyright
+ * ownership.  You may not use this file except in compliance with the License.
+ *
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+/*
+ * Copyright 2015 Cloudius Systems
+ */
+
 #include "websocket_fragment.hh"
 
 #pragma once
@@ -7,6 +28,28 @@ namespace seastar {
 namespace httpd {
 
 namespace websocket {
+
+/**
+ * Mask or unmask a buffer with the provided masking key. It's optimized to mask 32 bits at a time instead of 8 as
+ * the RFC suggest.
+ * Also, it is used as a concatenation utility, effectively masking/unmasking _and_ copying buffers to concatenate
+ * fragmented messages.
+ * @param dst pointer to the destination buffer where data are to be copied
+ * @param src pointer to the currently masked data buffer.
+ * @param mask pointer to the 4-bytes masking key.
+ * @param length how many bytes to mask/unmask.
+ */
+void un_mask(char* dst, const char* src, const char* mask, uint64_t length);
+
+/**
+ * Utility function. Check for UTF-8 encoding
+ * Extracted from https://www.cl.cam.ac.uk/~mgk25/ucs/utf8_check.c
+ * Licence : https://www.cl.cam.ac.uk/~mgk25/short-license.html
+ * @param s pointer to the buffer that is to be check against UTF-8 encoding
+ * @param length how many bytes to check.
+ * @return returns true if the data is a valid UTF-8 encoded string, false otherwise.
+ */
+bool utf8_check(const unsigned char* s, size_t length);
 
 class message_base {
 public:
@@ -73,16 +116,14 @@ public:
             std::memcpy(buf + k, fragments[j].message.get(), fragments[j].message.size());
             k += fragments[j].message.size();
         }
-        if (opcode == opcode::TEXT &&
-                !utf8_check((const unsigned char*)buf, payload.size())) {
+        if (opcode == opcode::TEXT && !utf8_check((const unsigned char*)buf, payload.size())) {
             throw websocket_exception(INCONSISTENT_DATA);
         }
     }
 
     message(inbound_fragment <CLIENT>& fragment) :
             message_base(fragment.header.opcode, std::move(fragment.message)) {
-        if (opcode == opcode::TEXT &&
-                !utf8_check((const unsigned char*)payload.get(), payload.size())) {
+        if (opcode == opcode::TEXT && !utf8_check((const unsigned char*)payload.get(), payload.size())) {
             throw websocket_exception(INCONSISTENT_DATA);
         }
     }
@@ -131,8 +172,7 @@ public:
     message(inbound_fragment <SERVER>& fragment) :
             message_base(fragment.header.opcode, temporary_buffer<char>(fragment.message.size())) {
         un_mask(payload.get_write(), fragment.message.get(), (char*)(&fragment.header.mask_key), payload.size());
-        if (opcode == opcode::TEXT &&
-                !utf8_check((const unsigned char*)payload.get(), payload.size())) {
+        if (opcode == opcode::TEXT && !utf8_check((const unsigned char*)payload.get(), payload.size())) {
             throw websocket_exception(INCONSISTENT_DATA);
         }
     }

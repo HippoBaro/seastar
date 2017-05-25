@@ -87,11 +87,12 @@ void set_routes(routes& r) {
         if (size) {
             base64.resize(size);
             encoder.Get((byte*) base64.data(), base64.size());
-        }
 
-        return stream.write(websocket::message<SERVER>(TEXT, base64.substr(0, base64.size() - 1))).then([&stream] {
-            return stream.flush();
-        });
+            return stream.write(websocket::message<SERVER>(TEXT, base64.substr(0, base64.size() - 1))).then([&stream] {
+                return stream.flush();
+            });
+        }
+        return make_ready_future();
     });
 
     ws_sha1_handler->on_disconnection([] (const std::unique_ptr<request>& req) {
