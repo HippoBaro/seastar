@@ -116,13 +116,13 @@ public:
             std::memcpy(buf + k, fragments[j].message.get(), fragments[j].message.size());
             k += fragments[j].message.size();
         }
-        if (opcode == opcode::TEXT && !utf8_check((const unsigned char*)buf, payload.size())) {
+        if (opcode == websocket::opcode::TEXT && !utf8_check((const unsigned char*)buf, payload.size())) {
             throw websocket_exception(INCONSISTENT_DATA);
         }
     }
 
     message(inbound_fragment <CLIENT>& fragment) : message_base(fragment.header.opcode, std::move(fragment.message)) {
-        if (opcode == opcode::TEXT && !utf8_check((const unsigned char*)payload.get(), payload.size())) {
+        if (opcode == websocket::opcode::TEXT && !utf8_check((const unsigned char*)payload.get(), payload.size())) {
             throw websocket_exception(INCONSISTENT_DATA);
         }
     }
@@ -163,7 +163,7 @@ public:
                     fragments[j].message.size());
             k += fragments[j].message.size();
         }
-        if (opcode == opcode::TEXT && !utf8_check((const unsigned char*)buf, payload.size())) {
+        if (opcode == websocket::opcode::TEXT && !utf8_check((const unsigned char*)buf, payload.size())) {
             throw websocket_exception(INCONSISTENT_DATA);
         }
     }
@@ -171,7 +171,7 @@ public:
     message(inbound_fragment <SERVER>& fragment) :
             message_base(fragment.header.opcode, temporary_buffer<char>(fragment.message.size())) {
         un_mask(payload.get_write(), fragment.message.get(), (char*)(&fragment.header.mask_key), payload.size());
-        if (opcode == opcode::TEXT && !utf8_check((const unsigned char*)payload.get(), payload.size())) {
+        if (opcode == websocket::opcode::TEXT && !utf8_check((const unsigned char*)payload.get(), payload.size())) {
             throw websocket_exception(INCONSISTENT_DATA);
         }
     }
