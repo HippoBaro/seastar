@@ -38,7 +38,12 @@ namespace websocket {
  * @param mask pointer to the 4-bytes masking key.
  * @param length how many bytes to mask/unmask.
  */
-inline void un_mask(char* dst, const char* src, const char* mask, uint64_t length);
+inline void un_mask(char* dst, const char* src, const char* mask, uint64_t length) {
+    //TODO good candidate for SIMD
+    for (uint64_t j = 0; j < length; ++j) {
+        dst[j] = src[j] ^ mask[j % 4];
+    }
+}
 
 /**
  * Utility function. Check for UTF-8 encoding

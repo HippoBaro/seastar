@@ -46,13 +46,6 @@ uint8_t message_base::write_header(char* header) {
     return advertised_size;
 }
 
-inline void un_mask(char* dst, const char* src, const char* mask, uint64_t length) {
-    //TODO good candidate for SIMD
-    for (uint64_t j = 0; j < length; ++j) {
-        dst[j] = src[j] ^ mask[j % 4];
-    }
-}
-
 // Extracted from https://www.cl.cam.ac.uk/~mgk25/ucs/utf8_check.c
 // Licence : https://www.cl.cam.ac.uk/~mgk25/short-license.html
 bool utf8_check(const unsigned char* s, size_t length) {
