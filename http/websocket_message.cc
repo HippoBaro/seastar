@@ -31,17 +31,17 @@ uint8_t message_base::write_header(char* header) {
 
     if (payload.size() < 126) { //Size fits 7bits
         advertised_size = (uint8_t)payload.size();
-        _header_size = 2;
+        header_size = 2;
     } else if (payload.size() <= std::numeric_limits<uint16_t>::max()) { //Size is extended to 16bits
         advertised_size = 126;
         auto s = net::hton(static_cast<uint16_t>(payload.size()));
         std::memmove(header + sizeof(uint16_t), &s, sizeof(uint16_t));
-        _header_size = 4;
+        header_size = 4;
     } else { //Size extended to 64bits
         advertised_size = 127;
         auto l = net::hton(payload.size());
         std::memmove(header + sizeof(uint16_t), &l, sizeof(uint64_t));
-        _header_size = 10;
+        header_size = 10;
     }
     return advertised_size;
 }

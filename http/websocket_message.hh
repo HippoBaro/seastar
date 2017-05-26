@@ -40,6 +40,7 @@ namespace websocket {
  */
 inline void un_mask(char* dst, const char* src, const char* mask, uint64_t length) {
     //TODO good candidate for SIMD
+    // Did try to process 32 bits at a time but got aliasing errors.
     for (uint64_t j = 0; j < length; ++j) {
         dst[j] = src[j] ^ mask[j % 4];
     }
@@ -58,26 +59,25 @@ bool utf8_check(const unsigned char* s, size_t length);
 class message_base {
 public:
     websocket::opcode opcode = RESERVED;
-    uint8_t _header_size = 0;
+    uint8_t header_size = 0;
     temporary_buffer<char> payload;
+    ///Only use when sending message, always true when receiving.
     bool fin = true;
 
-    message_base(websocket::opcode opcode, temporary_buffer<char> payload) noexcept :
-            opcode(opcode), payload(std::move(payload)) {
+    message_base(websocket::opcode opcode, temporary_buffer<char> payload, bool fin = true) noexcept :
+            opcode(opcode), payload(std::move(payload)), fin(fin) {
     };
 
     message_base(websocket::opcode opcode, sstring message = "", bool fin = true) noexcept :
             opcode(opcode), payload(std::move(std::move(message).release())), fin(fin) {
     };
 
-    message_base() noexcept {};
+    message_base() = default;
 
     message_base(const message_base&) = delete;
 
-    message_base(message_base&& other) noexcept : opcode(other.opcode),
-            _header_size(other._header_size),
-            payload(std::move(other.payload)),
-            fin(other.fin) {
+    message_base(message_base&& other) noexcept :
+            opcode(other.opcode), header_size(other.header_size), payload(std::move(other.payload)), fin(other.fin) {
     }
 
     void operator=(const message_base&) = delete;
@@ -85,7 +85,7 @@ public:
     message_base& operator=(message_base&& other) noexcept {
         if (this != &other) {
             opcode = other.opcode;
-            _header_size = other._header_size;
+            header_size = other.header_size;
             payload = std::move(other.payload);
             fin = other.fin;
         }
@@ -103,10 +103,9 @@ class message final : public message_base {
 
 template<>
 class message<CLIENT> final : public message_base {
-public:
     using message_base::message_base;
-
-    message() noexcept {}
+public:
+    message() = default;
 
     message(std::vector<websocket::inbound_fragment<CLIENT>>& fragments) :
             message_base(fragments.front().header.opcode, temporary_buffer<char>(
@@ -140,20 +139,20 @@ public:
         //FIXME Constructing an independent_bits_engine is expensive. static thread_local ?
         static thread_local std::independent_bits_engine<std::default_random_engine, std::numeric_limits<uint32_t>::digits, uint32_t> rbe;
         uint32_t mask = rbe();
-        std::memcpy(wr + _header_size, &mask, sizeof(uint32_t));
-        _header_size += sizeof(uint32_t);
+        std::memcpy(wr + header_size, &mask, sizeof(uint32_t));
+        header_size += sizeof(uint32_t);
         un_mask(payload.get_write(), payload.get(), (char*)(&mask), payload.size());
-        header.trim(_header_size);
+        header.trim(header_size);
         return std::move(header);
     }
 };
 
 template<>
 class message<SERVER> final : public message_base {
-public:
     using message_base::message_base;
+public:
 
-    message() noexcept {}
+    message() = default;
 
     message(std::vector<websocket::inbound_fragment<SERVER>>& fragments) :
             message_base(fragments.front().header.opcode, temporary_buffer<char>(
@@ -186,12 +185,18 @@ public:
         auto wr = header.get_write();
 
         wr[1] = write_header(wr);
-        header.trim(_header_size);
+        header.trim(header_size);
 
         return std::move(header);
     }
 };
 
+/**
+ * Utility function that construct a CLOSE message.
+ * @tparam type whether the message to create is from a SERVER or CLIENT websocket.
+ * @param code The close reason
+ * @return A new CLOSE message that has the 16-bits close reason encoded inside it's payload.
+ */
 template<websocket::endpoint_type type>
 static message<type> make_close_message(close_status_code code = NORMAL_CLOSURE) {
     if (code == NONE)

@@ -27,6 +27,12 @@ namespace seastar {
 namespace httpd {
 namespace websocket {
 
+/**
+ * The most basic handler possible. Your function is called when a new connection arrives, passing the
+ * connected_websocket.
+ * Note that, when using this handler, you need to properly support PING/PONG.
+ * @tparam type whether the underlying connected_websocket is a SERVER or CLIENT one
+ */
 template<websocket::endpoint_type type>
 class ws_function_handler : public httpd::handler_websocket_base {
     typedef std::function<future<>(std::unique_ptr<request>,
@@ -44,6 +50,11 @@ protected:
     future_ws_handler_function _f_handle;
 };
 
+/**
+ * Standard websocket handler, enables "event" programming.
+ * It provides automatic support for responding to PING message, but you can "override" this behavior.
+ * @tparam type whether the underlying connected_websocket is a SERVER or CLIENT one
+ */
 template<websocket::endpoint_type type>
 class ws_handler : public httpd::handler_websocket_base {
     typedef std::function<future<>(const std::unique_ptr<request>&)> future_ws_on_disconnected;
@@ -89,6 +100,11 @@ public:
                 });
     }
 
+    /**
+     * Sets the handler for TEXT/BINARY messages.
+     * This should only be used for non-blocking handler.
+     * @param handler function that is to be called
+     */
     void on_message(const void_ws_on_message& handler) {
         _on_message = [handler](const std::unique_ptr<request>& req, duplex_stream<type>&, message<type> message) {
             handler(req, std::move(message));
@@ -96,6 +112,11 @@ public:
         };
     }
 
+    /**
+     * Sets the handler for PING messages.
+     * This should only be used for non-blocking handler.
+     * @param handler function that is to be called
+     */
     void on_ping(const void_ws_on_message& handler) {
         _on_ping = [handler](const std::unique_ptr<request>& req, duplex_stream<type>&, message<type> message) {
             handler(req, std::move(message));
@@ -103,6 +124,11 @@ public:
         };
     }
 
+    /**
+     * Sets the handler for PONG messages.
+     * This should only be used for non-blocking handler.
+     * @param handler function that is to be called
+     */
     void on_pong(const void_ws_on_message& handler) {
         _on_pong = [handler](const std::unique_ptr<request>& req, duplex_stream<type>&, message<type> message) {
             handler(req, std::move(message));
@@ -110,6 +136,11 @@ public:
         };
     }
 
+    /**
+     * Sets the handler for new connections.
+     * This should only be used for non-blocking handler.
+     * @param handler function that is to be called
+     */
     void on_connection(const void_ws_on_connected& handler) {
         _on_connection = [handler](const std::unique_ptr<request>& req, duplex_stream<type>&) {
             handler(req);
@@ -117,6 +148,11 @@ public:
         };
     }
 
+    /**
+     * Sets the handler for closed connections.
+     * This should only be used for non-blocking handler.
+     * @param handler function that is to be called
+     */
     void on_disconnection(const void_ws_on_disconnected& handler) {
         _on_disconnection = [handler](const std::unique_ptr<request>& req) {
             handler(req);
@@ -124,14 +160,34 @@ public:
         };
     }
 
+    /**
+     * Sets the handler for TEXT/BINARY messages.
+     * @param handler the future that is to be called
+     */
     void on_message_future(const future_ws_on_message& handler) { _on_message = handler; }
 
+    /**
+     * Sets the handler for PING messages.
+     * @param handler the future that is to be called
+     */
     void on_ping_future(const future_ws_on_message& handler) { _on_ping = handler; }
 
+    /**
+     * Sets the handler for PONG messages.
+     * @param handler the future that is to be called
+     */
     void on_pong_future(const future_ws_on_message& handler) { _on_pong = handler; }
 
+    /**
+     * Sets the handler for new connections.
+     * @param handler the future that is to be called
+     */
     void on_connection_future(const future_ws_on_connected& handler) { _on_connection = handler; }
 
+    /**
+     * Sets the handler for closed connections.
+     * @param handler the future that is to be called
+     */
     void on_disconnection_future(const future_ws_on_disconnected& handler) { _on_disconnection = handler; }
 
 private:
@@ -147,7 +203,7 @@ private:
             case PONG:
                 return _on_pong(req, stream, std::move(message));
             default: //Other opcode are handled at a lower, protocol level.
-                throw std::exception();
+                return stream.close(); //Hum... This is embarrassing
         }
     }
 

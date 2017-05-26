@@ -84,19 +84,30 @@ public:
             status_code(status_code) {}
 };
 
+/**
+ * Represent a full fragment header.
+ * It's initialized with a 2 bytes buffer. If necessary, it can be extended to support longer fragment headers.
+ */
 class fragment_header {
 public:
+    /// Is this the last fragment
     bool fin;
+    /// Reserved bit 1 (used for extensions)
     bool rsv1;
+    /// Reserved bits 2 and 3 (reserved, never set)
     bool rsv23;
+    /// Opcode of the fragment
     websocket::opcode opcode;
+    /// Is the fragment payload masked
     bool masked;
+    /// The total length of the fragment's payload. Can change when feeding an extended header
     uint64_t length;
+    /// The masking key, if payload is masked
     uint32_t mask_key = 0;
 
     fragment_header() = default;
 
-    fragment_header(temporary_buffer<char>& header) :
+    fragment_header(temporary_buffer<char>& header) noexcept :
             fin(static_cast<bool>(header[0] & 128)),
             rsv1(static_cast<bool>(header[0] & 64)),
             rsv23(static_cast<bool>(header[0] & 48)),
@@ -159,34 +170,23 @@ public:
         return *this;
     }
 
+    /**
+     * Basic fragment protocol check. Does NOT means that the fragment payload is empty nor advertises EOF.
+     * @return true if fragment is valid, false otherwise
+     */
     operator bool() {
         return !((header.rsv1 || header.rsv23 || (header.opcode > 2 && header.opcode < 8)
                 || header.opcode > 10 || (header.opcode > 2 && (!header.fin || message.size() > 125))));
     }
 };
 
+/**
+ * This specialization is unused right now but could prove useful when extension comes into play.
+ */
 template<websocket::endpoint_type type>
 class inbound_fragment final : public inbound_fragment_base {
-};
-
-template<>
-class inbound_fragment<CLIENT> final : public inbound_fragment_base {
     using inbound_fragment_base::inbound_fragment_base;
-public:
-    inbound_fragment() noexcept {}
 
-    inbound_fragment(fragment_header const& header, temporary_buffer<char>& payload) noexcept:
-            inbound_fragment_base(header, payload) {}
-};
-
-template<>
-class inbound_fragment<SERVER> final : public inbound_fragment_base {
-    using inbound_fragment_base::inbound_fragment_base;
-public:
-    inbound_fragment() {}
-
-    inbound_fragment(fragment_header const& header, temporary_buffer<char>& payload) noexcept:
-            inbound_fragment_base(header, payload) {}
 };
 
 }
