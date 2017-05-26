@@ -35,7 +35,7 @@ sstring encode_handshake_key(sstring nonce) {
     return base64.substr(0, base64.size() - 1); //fixme useless cpy
 }
 
-future<websocket::connected_websocket<websocket::endpoint_type::CLIENT>>
+future<connected_socket>
 connect(socket_address sa, socket_address local) {
     return engine().net().connect(sa, local).then([local](connected_socket fd) {
         seastar::input_stream<char> in = std::move(fd.input());
@@ -79,7 +79,7 @@ connect(socket_address sa, socket_address local) {
                         throw std::exception(); //FIXME : proper failure
                     if (std::experimental::string_view(response.begin(), response.size())
                             .find(encode_handshake_key(nonce)) != std::string::npos) {
-                        return websocket::connected_websocket<websocket::endpoint_type::CLIENT>(std::move(fd), local);
+                        return std::move(fd);
                     } else {
                         fd.shutdown_input();
                         fd.shutdown_output();
