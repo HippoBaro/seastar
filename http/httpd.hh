@@ -148,6 +148,8 @@ public:
         };
 
         http_server& _server;
+        //The underlying sockets can become websockets
+        //FIXME boost::variant makes the code verbose and ugly
         boost::variant<connected_socket, websocket::connected_websocket<websocket::endpoint_type::SERVER>> _fd;
         input_stream<char> _read_buf;
         output_stream<char> _write_buf;
@@ -159,6 +161,7 @@ public:
         socket_address _addr;
         // null element marks eof
         queue<std::unique_ptr<reply>> _replies { 10 };
+        // connection_status disctates how the connection should be treated after the request as been served
         connection_status _done = keep_open;
     public:
 
@@ -181,13 +184,14 @@ public:
             // Launch read and write "threads" simultaneously:
             return when_all(read(), respond()).then(
                     [this](std::tuple<future<>, future<>> joined) {
-                        //The connection is now detached. It still exists but outside of read and write fibers
                         if (_done == detach) {
+                            // The connection is now detached. It still exists but outside of read and write fibers
                             sstring url = set_query_param(*_req.get());
                             return _write_buf.flush().then([this, url] {
                                 _fd = std::move(websocket::connected_websocket<websocket::endpoint_type::SERVER>(
                                         std::move(boost::get<connected_socket>(_fd)), _addr));
-                                return _server._routes.handle_ws(url, boost::get<websocket::connected_websocket<websocket::endpoint_type::SERVER>>
+                                return _server._routes.handle_ws(url,
+                                        boost::get<websocket::connected_websocket<websocket::endpoint_type::SERVER>>
                                                 (_fd), std::move(_req));
                             }).then_wrapped([](future<> f) {
                                 if (f.failed()) {
@@ -206,10 +210,8 @@ public:
                 boost::get<connected_socket>(_fd).shutdown_input();
                 boost::get<connected_socket>(_fd).shutdown_output();
             } else {
-                boost::get<websocket::connected_websocket<websocket::endpoint_type::SERVER>>
-                        (_fd).shutdown_input();
-                boost::get<websocket::connected_websocket<websocket::endpoint_type::SERVER>>
-                        (_fd).shutdown_output();
+                boost::get<websocket::connected_websocket<websocket::endpoint_type::SERVER>> (_fd).shutdown_input();
+                boost::get<websocket::connected_websocket<websocket::endpoint_type::SERVER>> (_fd).shutdown_output();
             }
         }
 
@@ -448,9 +450,10 @@ public:
             auto resp = std::make_unique<reply>();
             resp->set_version(req->_version);
 
+            // We search for the websocket nonce in the request headers
             auto it = req->_headers.find("Sec-WebSocket-Key");
             if (it != req->_headers.end() && _server._routes.get_ws_handler(url, _req)) {
-                //Success
+                // Found it, so we compute the websocket handshake key, reply and mark the connection as detached
                 resp->_headers["Upgrade"] = "websocket";
                 resp->_headers["Connection"] = "Upgrade";
 
@@ -459,7 +462,7 @@ public:
                 _req = std::move(req);
                 _done = done = detach;
             } else {
-                //Refused
+                // The upgrade request is invalid
                 _done = done = close;
                 resp->set_status(reply::status_type::bad_request);
             }
