@@ -141,7 +141,7 @@ public:
     }
 
     class connection : public boost::intrusive::list_base_hook<> {
-        enum connection_status {
+        enum class connection_status {
             keep_open = 0,
             close,
             detach
@@ -162,7 +162,7 @@ public:
         // null element marks eof
         queue<std::unique_ptr<reply>> _replies { 10 };
         // connection_status disctates how the connection should be treated after the request as been served
-        connection_status _done = keep_open;
+        connection_status _done = connection_status::keep_open;
     public:
 
         connection(http_server& server, connected_socket&& fd,
@@ -184,7 +184,7 @@ public:
             // Launch read and write "threads" simultaneously:
             return when_all(read(), respond()).then(
                     [this](std::tuple<future<>, future<>> joined) {
-                        if (_done == detach) {
+                        if (_done == connection_status::detach) {
                             // The connection is now detached. It still exists but outside of read and write fibers
                             sstring url = set_query_param(*_req.get());
                             return _write_buf.flush().then([this, url] {
@@ -216,18 +216,18 @@ public:
         }
 
         future<> read() {
-            return do_until([this] { return _done != keep_open; }, [this] {
+            return do_until([this] { return _done != connection_status::keep_open; }, [this] {
                 return read_one();
             }).then_wrapped([this](future<> f) {
                 // swallow error
                 if (f.failed())
                     _server._read_errors++;
                 f.ignore_ready_future();
-                if (_done == detach)
+                if (_done == connection_status::detach)
                     return make_ready_future();
                 return _replies.push_eventually({});
             }).finally([this] {
-                if (_done == detach)
+                if (_done == connection_status::detach)
                     return make_ready_future<>();
                 return _read_buf.close();
             });
@@ -237,7 +237,7 @@ public:
             _parser.init();
             return _read_buf.consume(_parser).then([this]() mutable {
                 if (_parser.eof()) {
-                    _done = close;
+                    _done = connection_status::close;
                     return make_ready_future<>();
                 }
                 ++_server._requests_served;
@@ -258,7 +258,7 @@ public:
                     _server._respond_errors++;
                 }
                 f.ignore_ready_future();
-                if (_done == detach)
+                if (_done == connection_status::detach)
                     return make_ready_future<>();
                 return _write_buf.close();
             });
@@ -273,7 +273,7 @@ public:
                         }
                         _resp = std::move(resp);
                         return start_response().then([this] {
-                            if (_done == keep_open)
+                            if (_done == connection_status::keep_open)
                                 return do_response_loop();
                             return make_ready_future<>();
                         });
@@ -421,7 +421,6 @@ public:
             if (req->_version == "1.0") {
                 if (conn_keep_alive) {
                     resp->_headers["Connection"] = "Keep-Alive";
-                    std::cout << "keep alive" << std::endl;
                 }
                 should_close = !conn_keep_alive;
             } else if (req->_version == "1.1") {
@@ -437,9 +436,10 @@ public:
                     [this, should_close, version = std::move(version)](std::unique_ptr<reply> rep) {
                         rep->set_version(version).done();
                         this->_replies.push(std::move(rep));
-                        if (should_close)
-                            return make_ready_future<connection_status>(close);
-                        return make_ready_future<connection_status>(keep_open);
+                        if (should_close) {
+                            return make_ready_future<connection_status>(connection_status::close);
+                        }
+                        return make_ready_future<connection_status>(connection_status::keep_open);
                     });
         }
 
@@ -460,10 +460,10 @@ public:
                 resp->_headers["Sec-WebSocket-Accept"] = httpd::websocket::encode_handshake_key(it->second);
                 resp->set_status(reply::status_type::switching_protocols).done();
                 _req = std::move(req);
-                _done = done = detach;
+                _done = done = connection_status::detach;
             } else {
                 // The upgrade request is invalid
-                _done = done = close;
+                _done = done = connection_status::close;
                 resp->set_status(reply::status_type::bad_request);
             }
             resp->done();

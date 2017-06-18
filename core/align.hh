@@ -53,12 +53,6 @@ T* align_down(T* v, size_t align) {
     return reinterpret_cast<T*>(align_down(reinterpret_cast<uintptr_t>(v), align));
 }
 
-
-template <typename T>
-inline bool is_aligned(const T* v) {
-    return (uintptr_t)(const void *)(v) % sizeof(T) == 0;
-}
-
 }
 
 #endif /* ALIGN_HH_ */

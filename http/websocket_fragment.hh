@@ -48,7 +48,7 @@ namespace websocket {
 +---------------------------------------------------------------+
 */
 
-enum close_status_code : uint16_t {
+enum class close_status_code : uint16_t {
     NORMAL_CLOSURE = 1000,
     GOING_AWAY = 1001,
     PROTOCOL_ERROR = 1002,
@@ -61,26 +61,25 @@ enum close_status_code : uint16_t {
     NONE
 };
 
-enum endpoint_type {
+enum class endpoint_type {
     SERVER,
     CLIENT
 };
 
-enum opcode : uint8_t {
-    CONTINUATION = 0x0,
-    TEXT = 0x1,
-    BINARY = 0x2,
-    CLOSE = 0x8,
-    PING = 0x9,
-    PONG = 0xA,
-    RESERVED = 0xB
+enum class opcode : uint8_t {
+    CONTINUATION = 0,
+    TEXT = 1,
+    BINARY = 2,
+    CLOSE = 8,
+    PING = 9,
+    PONG = 10
 };
 
 class websocket_exception final : public std::exception {
 public:
     close_status_code status_code;
 
-    websocket_exception(close_status_code status_code = NORMAL_CLOSURE) noexcept :
+    websocket_exception(close_status_code status_code = close_status_code::NORMAL_CLOSURE) noexcept :
             status_code(status_code) {}
 };
 
@@ -144,7 +143,6 @@ public:
 };
 
 class inbound_fragment_base {
-    friend class input_stream_base;
 
 public:
     fragment_header header;
@@ -175,8 +173,8 @@ public:
      * @return true if fragment is valid, false otherwise
      */
     operator bool() {
-        return !((header.rsv1 || header.rsv23 || (header.opcode > 2 && header.opcode < 8)
-                || header.opcode > 10 || (header.opcode > 2 && (!header.fin || message.size() > 125))));
+        return !((header.rsv1 || header.rsv23 || (int(header.opcode) > 2 && int(header.opcode) < 8)
+                || int(header.opcode) > 10 || (int(header.opcode) > 2 && (!header.fin || message.size() > 125))));
     }
 };
 

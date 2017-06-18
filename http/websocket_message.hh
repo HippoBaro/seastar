@@ -58,7 +58,7 @@ bool utf8_check(const unsigned char* s, size_t length);
 
 class message_base {
 public:
-    websocket::opcode opcode = RESERVED;
+    websocket::opcode opcode;
     uint8_t header_size = 0;
     temporary_buffer<char> payload;
     ///Only use when sending message, always true when receiving.
@@ -102,15 +102,15 @@ class message final : public message_base {
 };
 
 template<>
-class message<CLIENT> final : public message_base {
+class message<endpoint_type::CLIENT> final : public message_base {
     using message_base::message_base;
 public:
     message() = default;
 
-    message(std::vector<websocket::inbound_fragment<CLIENT>>& fragments) :
+    message(std::vector<websocket::inbound_fragment<endpoint_type::CLIENT>>& fragments) :
             message_base(fragments.front().header.opcode, temporary_buffer<char>(
                     std::accumulate(fragments.begin(), fragments.end(), 0,
-                            [](size_t x, inbound_fragment <CLIENT>& y) {
+                            [](size_t x, inbound_fragment <endpoint_type::CLIENT>& y) {
                                 return x + y.message.size();
                             }))) {
         uint64_t k = 0;
@@ -121,13 +121,13 @@ public:
             k += fragments[j].message.size();
         }
         if (opcode == websocket::opcode::TEXT && !utf8_check((const unsigned char*)buf, payload.size())) {
-            throw websocket_exception(INCONSISTENT_DATA);
+            throw websocket_exception(close_status_code::INCONSISTENT_DATA);
         }
     }
 
-    message(inbound_fragment <CLIENT>& fragment) : message_base(fragment.header.opcode, std::move(fragment.message)) {
+    message(inbound_fragment<endpoint_type::CLIENT>& fragment) : message_base(fragment.header.opcode, std::move(fragment.message)) {
         if (opcode == websocket::opcode::TEXT && !utf8_check((const unsigned char*)payload.get(), payload.size())) {
-            throw websocket_exception(INCONSISTENT_DATA);
+            throw websocket_exception(close_status_code::INCONSISTENT_DATA);
         }
     }
 
@@ -148,16 +148,16 @@ public:
 };
 
 template<>
-class message<SERVER> final : public message_base {
+class message<endpoint_type::SERVER> final : public message_base {
     using message_base::message_base;
 public:
 
     message() = default;
 
-    message(std::vector<websocket::inbound_fragment<SERVER>>& fragments) :
+    message(std::vector<websocket::inbound_fragment<endpoint_type::SERVER>>& fragments) :
             message_base(fragments.front().header.opcode, temporary_buffer<char>(
                     std::accumulate(fragments.begin(), fragments.end(), 0,
-                            [](size_t x, inbound_fragment <SERVER>& y) {
+                            [](size_t x, inbound_fragment<endpoint_type::SERVER>& y) {
                                 return x + y.message.size();
                             }))) {
         uint64_t k = 0;
@@ -168,15 +168,15 @@ public:
             k += fragments[j].message.size();
         }
         if (opcode == websocket::opcode::TEXT && !utf8_check((const unsigned char*)buf, payload.size())) {
-            throw websocket_exception(INCONSISTENT_DATA);
+            throw websocket_exception(close_status_code::INCONSISTENT_DATA);
         }
     }
 
-    message(inbound_fragment <SERVER>& fragment) :
+    message(inbound_fragment<endpoint_type::SERVER>& fragment) :
             message_base(fragment.header.opcode, temporary_buffer<char>(fragment.message.size())) {
         un_mask(payload.get_write(), fragment.message.get(), (char*)(&fragment.header.mask_key), payload.size());
         if (opcode == websocket::opcode::TEXT && !utf8_check((const unsigned char*)payload.get(), payload.size())) {
-            throw websocket_exception(INCONSISTENT_DATA);
+            throw websocket_exception(close_status_code::INCONSISTENT_DATA);
         }
     }
 
@@ -198,12 +198,12 @@ public:
  * @return A new CLOSE message that has the 16-bits close reason encoded inside it's payload.
  */
 template<websocket::endpoint_type type>
-static message<type> make_close_message(close_status_code code = NORMAL_CLOSURE) {
-    if (code == NONE)
-        return message<type>(CLOSE);
+static message<type> make_close_message(close_status_code code = close_status_code::NORMAL_CLOSURE) {
+    if (code == close_status_code::NONE)
+        return message<type>(opcode::CLOSE);
     sstring payload(sizeof(uint16_t), '\0');
     *(reinterpret_cast<uint16_t*>(payload.begin())) = net::hton((uint16_t)code);
-    return message<type>(CLOSE, std::move(payload));
+    return message<type>(opcode::CLOSE, std::move(payload));
 }
 
 }

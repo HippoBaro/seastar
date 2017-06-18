@@ -29,8 +29,8 @@ namespace httpd {
 
 using namespace std;
 
-void verify_param(const std::unique_ptr<request>& req, const sstring& param) {
-    if (req->get_query_param(param) == "") {
+void verify_param(const request& req, const sstring& param) {
+    if (req.get_query_param(param) == "") {
         throw missing_param_exception(param);
     }
 }
@@ -88,7 +88,7 @@ future<std::unique_ptr<reply> > routes::handle(const sstring& path, std::unique_
     if (handler != nullptr) {
         try {
             for (auto& i : handler->_mandatory_param) {
-                verify_param(req, i);
+                verify_param(*req.get(), i);
             }
             auto r =  handler->handle(path, std::move(req), std::move(rep));
             return r.handle_exception(_general_handler);
@@ -113,7 +113,7 @@ future<> routes::handle_ws(const sstring &path, websocket::connected_websocket<w
     handler_websocket_base* handler = get_ws_handler(normalize_url(path), request);
     if (handler != nullptr) {
         for (auto& i : handler->_mandatory_param) {
-            verify_param(request, i);
+            verify_param(*request.get(), i);
         }
         return handler->handle(path, ws, std::move(request));
     }
@@ -150,7 +150,7 @@ handler_websocket_base *routes::get_ws_handler(const sstring &url, const std::un
     if (handler != nullptr) {
         try {
             for (auto& i : handler->_mandatory_param) {
-                verify_param(req, i);
+                verify_param(*req.get(), i);
             }
         }
         catch (const missing_param_exception &e) {

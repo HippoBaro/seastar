@@ -27,7 +27,7 @@ namespace websocket {
 
 uint8_t message_base::write_header(char* header) {
     uint8_t advertised_size = 0;
-    header[0] = opcode ^ (fin ? 0x80 : 0x0);
+    header[0] = uint8_t(opcode) ^ (fin ? 0x80 : 0x0);
 
     if (payload.size() < 126) { //Size fits 7bits
         advertised_size = (uint8_t)payload.size();

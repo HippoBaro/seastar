@@ -79,17 +79,19 @@ public:
                 return stream.write(std::move(message)).then([&stream] {
                     return stream.flush();
                 });
-            }) {
-
-    }
+            })
+    { }
 
     future<> handle(const sstring& path, connected_websocket<type>& ws, std::unique_ptr<request> req) override {
         return do_with(ws.stream(), std::move(req),
                 [this](duplex_stream<type>& stream, std::unique_ptr<request>& req) {
                     return _on_connection(req, stream).then([this, &stream, &req] {
-                        return repeat([this, &stream, &req] {
-                            return stream.read().then([this, &req, &stream](message<type> message) {
-                                return on_message_internal(req, stream, message).then([] {
+                        return repeat([this, &stream, &req] () -> future<stop_iteration> {
+                            return stream.read().then([this, &req, &stream](std::experimental::optional<message<type>> message) -> future<stop_iteration> {
+                                if (!message) {
+                                    return make_ready_future<stop_iteration>(stop_iteration::yes);
+                                }
+                                return on_message_internal(req, stream, *message).then([] {
                                     return stop_iteration::no;
                                 });
                             });
@@ -195,15 +197,15 @@ private:
     future<> on_message_internal(const std::unique_ptr<request>& req, duplex_stream<type>& stream,
             message<type>& message) {
         switch (message.opcode) {
-            case TEXT:
-            case BINARY:
+            case opcode::TEXT:
+            case opcode::BINARY:
                 return _on_message(req, stream, std::move(message));
-            case PING:
+            case opcode::PING:
                 return _on_ping(req, stream, std::move(message));
-            case PONG:
+            case opcode::PONG:
                 return _on_pong(req, stream, std::move(message));
             default: //Other opcode are handled at a lower, protocol level.
-                return stream.close(); //Hum... This is embarrassing
+                return stream.close(close_status_code::UNEXPECTED_CONDITION); //Hum... This is embarrassing
         }
     }
 

@@ -53,26 +53,26 @@ void set_routes(routes& r) {
         return make_ready_future<json::json_return_type>("json-future");
     });
 
-    auto ws_echo_handler = new websocket::ws_handler<SERVER>();
+    auto ws_echo_handler = new websocket::ws_handler<endpoint_type::SERVER>();
 
-    ws_echo_handler->on_message_future([] (const std::unique_ptr<request>& req, duplex_stream<SERVER>& stream,
-            message<SERVER> message) {
+    ws_echo_handler->on_message_future([] (const std::unique_ptr<request>& req, duplex_stream<endpoint_type::SERVER>& stream,
+            message<endpoint_type::SERVER> message) {
         return stream.write(std::move(message)).then([&stream] {
             return stream.flush();
         });
     });
 
-    auto ws_sha1_handler = new websocket::ws_handler<SERVER>();
+    auto ws_sha1_handler = new websocket::ws_handler<endpoint_type::SERVER>();
 
-    ws_sha1_handler->on_connection_future([] (const std::unique_ptr<request>& req, duplex_stream<SERVER>& stream) {
-        return stream.write(websocket::message<SERVER>(TEXT, "Hello from seastar ! Send any message to this endpoint"
+    ws_sha1_handler->on_connection_future([] (const std::unique_ptr<request>& req, duplex_stream<endpoint_type::SERVER>& stream) {
+        return stream.write(websocket::message<endpoint_type::SERVER>(opcode::TEXT, "Hello from seastar ! Send any message to this endpoint"
                 " and get back it's payload SHA1 in base64 format !")).then([&stream] {
             return stream.flush();
         });
     });
 
-    ws_sha1_handler->on_message_future([] (const std::unique_ptr<request>& req, duplex_stream<SERVER>& stream,
-            message<SERVER> message) {
+    ws_sha1_handler->on_message_future([] (const std::unique_ptr<request>& req, duplex_stream<endpoint_type::SERVER>& stream,
+            message<endpoint_type::SERVER> message) {
         CryptoPP::SHA hash;
         byte digest[CryptoPP::SHA::DIGESTSIZE];
         hash.Update((byte*) message.payload.begin(), message.payload.size());
@@ -88,7 +88,7 @@ void set_routes(routes& r) {
             base64.resize(size);
             encoder.Get((byte*) base64.data(), base64.size());
 
-            return stream.write(websocket::message<SERVER>(TEXT, base64.substr(0, base64.size() - 1))).then([&stream] {
+            return stream.write(websocket::message<endpoint_type::SERVER>(opcode::TEXT, base64.substr(0, base64.size() - 1))).then([&stream] {
                 return stream.flush();
             });
         }
