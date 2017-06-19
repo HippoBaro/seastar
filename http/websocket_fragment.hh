@@ -16,13 +16,14 @@
  * under the License.
  */
 /*
- * Copyright 2015 Cloudius Systems
+ * Copyright 2017 Hippolyte Barraud
  */
 
 #pragma once
 
 #include <core/reactor.hh>
 #include <random>
+#include <core/byteorder.hh>
 
 namespace seastar {
 namespace httpd {
@@ -107,34 +108,34 @@ public:
     fragment_header() = default;
 
     fragment_header(temporary_buffer<char>& header) noexcept :
-            fin(static_cast<bool>(header[0] & 128)),
-            rsv1(static_cast<bool>(header[0] & 64)),
-            rsv23(static_cast<bool>(header[0] & 48)),
-            opcode(static_cast<websocket::opcode>(header[0] & 15)),
-            masked(static_cast<bool>(header[1] & 128)),
-            length(static_cast<uint8_t>(header[1] & 127)) {}
+            fin(bool(header[0] & 128)),
+            rsv1(bool(header[0] & 64)),
+            rsv23(bool(header[0] & 48)),
+            opcode(websocket::opcode(header[0] & 15)),
+            masked(bool(header[1] & 128)),
+            length(uint8_t(header[1] & 127)) {
+    }
 
     uint8_t extended_header_length_size() {
         uint8_t ret = 0;
-        if (length == 126) ret += sizeof(uint16_t); // Extended length is 16 bits.
-        else if (length == 127) ret += sizeof(uint64_t); // Extended length is 64 bits.
+        if (length == 126) {
+            ret = sizeof(uint16_t); // Extended length is 16 bits.
+        } else if (length == 127) {
+            ret = sizeof(uint64_t); // Extended length is 64 bits.
+        }
         return ret;
     }
 
     uint8_t extended_header_size() {
         uint8_t ret = extended_header_length_size();
-        if (masked) ret += sizeof(uint32_t); // Mask key is 32bits.
-        return ret;
+        return masked ? ret + sizeof(uint32_t) : ret;
     }
 
     void feed_extended_header(temporary_buffer<char>& extended_header) {
         if (length == 126 && extended_header.size() >= sizeof(uint16_t)) {
-            uint16_t len;
-            std::memcpy(&len, extended_header.get(), sizeof(uint16_t));
-            length = net::ntoh(len);
+            length = read_be<uint16_t>(extended_header.get());
         } else if (length == 127 && extended_header.size() >= sizeof(uint64_t)) {
-            std::memcpy(&length, extended_header.get(), sizeof(uint64_t));
-            length = net::ntoh(length);
+            length = read_be<uint64_t>(extended_header.get());
         }
         if (masked) {
             std::memcpy(&mask_key, extended_header.end() - sizeof(uint32_t), sizeof(uint32_t));
@@ -161,18 +162,17 @@ public:
     inbound_fragment_base& operator=(const inbound_fragment_base&) = delete;
 
     inbound_fragment_base& operator=(inbound_fragment_base&& fragment) noexcept {
-        if (*this != fragment) {
-            header = fragment.header;
-            message = std::move(fragment.message);
-        }
+        header = fragment.header;
+        message = std::move(fragment.message);
         return *this;
     }
 
+    //TODO make bool() test for empty fragment and change this to .valid()
     /**
      * Basic fragment protocol check. Does NOT means that the fragment payload is empty nor advertises EOF.
      * @return true if fragment is valid, false otherwise
      */
-    operator bool() {
+    explicit operator bool() const {
         return !((header.rsv1 || header.rsv23 || (int(header.opcode) > 2 && int(header.opcode) < 8)
                 || int(header.opcode) > 10 || (int(header.opcode) > 2 && (!header.fin || message.size() > 125))));
     }

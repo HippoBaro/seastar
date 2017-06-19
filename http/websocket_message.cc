@@ -16,7 +16,7 @@
  * under the License.
  */
 /*
- * Copyright 2015 Cloudius Systems
+ * Copyright 2017 Hippolyte Barraud
  */
 
 #include "websocket_message.hh"
@@ -34,13 +34,11 @@ uint8_t message_base::write_header(char* header) {
         header_size = 2;
     } else if (payload.size() <= std::numeric_limits<uint16_t>::max()) { //Size is extended to 16bits
         advertised_size = 126;
-        auto s = net::hton(static_cast<uint16_t>(payload.size()));
-        std::memmove(header + sizeof(uint16_t), &s, sizeof(uint16_t));
+        write_be(header + sizeof(uint16_t), static_cast<uint16_t>(payload.size()));
         header_size = 4;
     } else { //Size extended to 64bits
         advertised_size = 127;
-        auto l = net::hton(payload.size());
-        std::memmove(header + sizeof(uint16_t), &l, sizeof(uint64_t));
+        write_be(header + sizeof(uint16_t), static_cast<uint64_t>(payload.size()));
         header_size = 10;
     }
     return advertised_size;

@@ -16,7 +16,7 @@
  * under the License.
  */
 /*
- * Copyright 2015 Cloudius Systems
+ * Copyright 2017 Hippolyte Barraud
  */
 
 #include "websocket_fragment.hh"
