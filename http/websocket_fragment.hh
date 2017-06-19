@@ -143,25 +143,27 @@ public:
     }
 };
 
-class inbound_fragment_base {
-
+/**
+ * This specialization is unused right now but could prove useful when extension comes into play.
+ */
+class inbound_fragment final {
 public:
     fragment_header header;
     temporary_buffer<char> message;
 
-    inbound_fragment_base(fragment_header const& header, temporary_buffer<char>& payload) noexcept :
-            header(header), message(std::move(payload)) { }
+    inbound_fragment(fragment_header const& header, temporary_buffer<char>& payload) noexcept :
+    header(header), message(std::move(payload)) { }
 
-    inbound_fragment_base(const inbound_fragment_base&) = delete;
+    inbound_fragment(const inbound_fragment&) = delete;
 
-    inbound_fragment_base(inbound_fragment_base&& fragment) noexcept :
-            header(fragment.header), message(std::move(fragment.message)) {}
+    inbound_fragment(inbound_fragment&& fragment) noexcept :
+    header(fragment.header), message(std::move(fragment.message)) {}
 
-    inbound_fragment_base() = default;
+    inbound_fragment() = default;
 
-    inbound_fragment_base& operator=(const inbound_fragment_base&) = delete;
+    inbound_fragment& operator=(const inbound_fragment&) = delete;
 
-    inbound_fragment_base& operator=(inbound_fragment_base&& fragment) noexcept {
+    inbound_fragment& operator=(inbound_fragment&& fragment) noexcept {
         header = fragment.header;
         message = std::move(fragment.message);
         return *this;
@@ -172,22 +174,17 @@ public:
      * Basic fragment protocol check. Does NOT means that the fragment payload is empty nor advertises EOF.
      * @return true if fragment is valid, false otherwise
      */
-    explicit operator bool() const {
+    bool is_valid() const {
         return !((header.rsv1 || header.rsv23 || (int(header.opcode) > 2 && int(header.opcode) < 8)
                 || int(header.opcode) > 10 || (int(header.opcode) > 2 && (!header.fin || message.size() > 125))));
+    };
+
+    explicit operator bool() const {
+        return !this->message.empty();
     }
-};
-
-/**
- * This specialization is unused right now but could prove useful when extension comes into play.
- */
-template<websocket::endpoint_type type>
-class inbound_fragment final : public inbound_fragment_base {
-    using inbound_fragment_base::inbound_fragment_base;
 
 };
 
 }
 }
 }
-

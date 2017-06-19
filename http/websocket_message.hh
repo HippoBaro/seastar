@@ -107,10 +107,10 @@ class message<endpoint_type::CLIENT> final : public message_base {
 public:
     message() = default;
 
-    message(std::vector<websocket::inbound_fragment<endpoint_type::CLIENT>>& fragments) :
+    message(std::vector<websocket::inbound_fragment>& fragments) :
             message_base(fragments.front().header.opcode, temporary_buffer<char>(
                     std::accumulate(fragments.begin(), fragments.end(), 0,
-                            [](size_t x, inbound_fragment <endpoint_type::CLIENT>& y) {
+                            [](size_t x, inbound_fragment& y) {
                                 return x + y.message.size();
                             }))) {
         uint64_t k = 0;
@@ -125,7 +125,7 @@ public:
         }
     }
 
-    message(inbound_fragment<endpoint_type::CLIENT>& fragment) : message_base(fragment.header.opcode, std::move(fragment.message)) {
+    message(inbound_fragment& fragment) : message_base(fragment.header.opcode, std::move(fragment.message)) {
         if (opcode == websocket::opcode::TEXT && !utf8_check((const unsigned char*)payload.get(), payload.size())) {
             throw websocket_exception(close_status_code::INCONSISTENT_DATA);
         }
@@ -154,10 +154,10 @@ public:
 
     message() = default;
 
-    message(std::vector<websocket::inbound_fragment<endpoint_type::SERVER>>& fragments) :
+    message(std::vector<websocket::inbound_fragment>& fragments) :
             message_base(fragments.front().header.opcode, temporary_buffer<char>(
                     std::accumulate(fragments.begin(), fragments.end(), 0,
-                            [](size_t x, inbound_fragment<endpoint_type::SERVER>& y) {
+                            [](size_t x, inbound_fragment& y) {
                                 return x + y.message.size();
                             }))) {
         uint64_t k = 0;
@@ -172,7 +172,7 @@ public:
         }
     }
 
-    message(inbound_fragment<endpoint_type::SERVER>& fragment) :
+    message(inbound_fragment& fragment) :
             message_base(fragment.header.opcode, temporary_buffer<char>(fragment.message.size())) {
         un_mask(payload.get_write(), fragment.message.get(), (char*)(&fragment.header.mask_key), payload.size());
         if (opcode == websocket::opcode::TEXT && !utf8_check((const unsigned char*)payload.get(), payload.size())) {
