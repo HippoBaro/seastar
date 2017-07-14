@@ -152,12 +152,12 @@ public:
     temporary_buffer<char> message;
 
     inbound_fragment(fragment_header const& header, temporary_buffer<char>& payload) noexcept :
-    header(header), message(std::move(payload)) { }
+            header(header), message(std::move(payload)) { }
 
     inbound_fragment(const inbound_fragment&) = delete;
 
     inbound_fragment(inbound_fragment&& fragment) noexcept :
-    header(fragment.header), message(std::move(fragment.message)) {}
+            header(fragment.header), message(std::move(fragment.message)) {}
 
     inbound_fragment() = default;
 

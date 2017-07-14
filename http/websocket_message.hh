@@ -111,7 +111,7 @@ public:
             message_base(fragments.front().header.opcode, temporary_buffer<char>(
                     std::accumulate(fragments.begin(), fragments.end(), 0,
                             [](size_t x, inbound_fragment& y) {
-                                return x + y.message.size();
+                              return x + y.message.size();
                             }))) {
         uint64_t k = 0;
         char* buf = payload.get_write();
@@ -158,7 +158,7 @@ public:
             message_base(fragments.front().header.opcode, temporary_buffer<char>(
                     std::accumulate(fragments.begin(), fragments.end(), 0,
                             [](size_t x, inbound_fragment& y) {
-                                return x + y.message.size();
+                              return x + y.message.size();
                             }))) {
         uint64_t k = 0;
         char* buf = payload.get_write();
