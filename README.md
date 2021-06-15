@@ -1,3 +1,11 @@
+Couldn't find an issues section, so figured I would try a pull request for getting a communication channel open :)
+
+Can I get your thoughts on this issue?
+https://github.com/ImmortalEmperor/UnrealEngine/issues/10
+
+Thanks!
+JD
+
 Seastar
 =======
 
